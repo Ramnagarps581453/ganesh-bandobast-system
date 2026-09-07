@@ -3,10 +3,16 @@ from supabase import create_client, Client
 import datetime
 import pandas as pd
 from io import BytesIO
-from reportlab.lib.pagesizes import letter
-from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle
-from reportlab.lib.styles import getSampleStyleSheet
-from reportlab.lib import colors
+
+# Safe import for ReportLab
+try:
+    from reportlab.lib.pagesizes import letter
+    from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle
+    from reportlab.lib.styles import getSampleStyleSheet
+    from reportlab.lib import colors
+    REPORTLAB_AVAILABLE = True
+except ImportError:
+    REPORTLAB_AVAILABLE = False
 
 st.set_page_config(
     page_title="Ganesh Bandobast Digital Monitoring System",
@@ -29,6 +35,9 @@ except Exception as e:
 
 # Helper function to generate PDF Report
 def generate_pdf(dataframe):
+    if not REPORTLAB_AVAILABLE:
+        return None
+    
     buffer = BytesIO()
     doc = SimpleDocTemplate(buffer, pagesize=letter)
     elements = []
@@ -55,7 +64,7 @@ def generate_pdf(dataframe):
     buffer.seek(0)
     return buffer
 
-# Main Header with Logos on both sides
+# Main Title with Logos
 st.markdown(
     "<h1 style='text-align: center;'>🐘 Ganesh Bandobast Digital Monitoring System 🐘</h1>", 
     unsafe_allow_html=True
@@ -138,16 +147,19 @@ if role == "Division Control Dashboard":
     st.markdown("<br>", unsafe_allow_html=True)
 
     st.subheader("View PDF Report")
-    if not filtered_df.empty:
-        pdf_data = generate_pdf(filtered_df[['station_name', 'pandal_name', 'sensitivity_level', 'immersion_date', 'immersion_status']])
-        st.download_button(
-            label="📄 PDF ವರದಿ ಡೌನ್‌ಲೋಡ್ ಮಾಡಿ (Download PDF Report)",
-            data=pdf_data,
-            file_name=f"Ganesh_Bandobast_Report_{datetime.date.today()}.pdf",
-            mime="application/pdf"
-        )
+    if REPORTLAB_AVAILABLE:
+        if not filtered_df.empty:
+            pdf_data = generate_pdf(filtered_df[['station_name', 'pandal_name', 'sensitivity_level', 'immersion_date', 'immersion_status']])
+            st.download_button(
+                label="📄 PDF ವರದಿ ಡೌನ್‌ಲೋಡ್ ಮಾಡಿ (Download PDF Report)",
+                data=pdf_data,
+                file_name=f"Ganesh_Bandobast_Report_{datetime.date.today()}.pdf",
+                mime="application/pdf"
+            )
+        else:
+            st.info("ವರದಿ ರಚಿಸಲು ಯಾವುದೇ ಡೇಟಾ ಲಭ್ಯವಿಲ್ಲ.")
     else:
-        st.info("ವರದಿ ರಚಿಸಲು ಯಾವುದೇ ಡೇಟಾ ಲಭ್ಯವಿಲ್ಲ.")
+        st.warning("`reportlab` ಲೈಬ್ರರಿಯನ್ನು ಇನ್‌ಸ್ಟಾಲ್ ಮಾಡಲಾಗುತ್ತಿದೆ... `requirements.txt` ಅಪ್‌ಡೇಟ್ ಮಾಡಿ.")
 
     st.markdown("---")
 
@@ -158,10 +170,11 @@ if role == "Division Control Dashboard":
         st.write("ಯಾವುದೇ ವಿವರಗಳು ಲಭ್ಯವಿಲ್ಲ.")
 
 # ==========================================
-# 2. STATION WRITER INTERFACE
+# 2. STATION WRITER INTERFACE (Kannada / Unicode Input)
 # ==========================================
 elif role == "ಠಾಣಾ ಬರಹಗಾರರು (Station Writer)":
     st.markdown("<h2 style='text-align: center; color: #800000;'>ಠಾಣಾ ಬರಹಗಾರರ ಡ್ಯಾಶ್‌ಬೋರ್ಡ್</h2>", unsafe_allow_html=True)
+    st.caption("ಸೂಚನೆ: ಈ ಕೆಳಗಿನ ಎಲ್ಲಾ ವಿವರಗಳನ್ನು ಯುನಿಕೋಡ್ ಕನ್ನಡದಲ್ಲಿ (Kannada Unicode / Indic Keyboard) ನೇರವಾಗಿ ಟೈಪ್ ಮಾಡಬಹುದು.")
     
     default_stations = ["Haliyal", "Dandeli Town", "Dandeli Rural", "Ambikanagar", "Ramanagar", "Joida"]
     try:
@@ -209,14 +222,14 @@ elif role == "ಠಾಣಾ ಬರಹಗಾರರು (Station Writer)":
 
     st.markdown("---")
 
-    # Form to register individual committee details
+    # Form accepting Unicode Kannada text directly
     with st.form("station_writer_form"):
-        pandal_name = st.text_input("ಗಣೇಶೋತ್ಸವ ಸಮಿತಿಯ ಹೆಸರು :")
-        location_address = st.text_input("ಪ್ರತಿಷ್ಠಾಪನೆಯಾಗುವ ಸ್ಥಳ :")
+        pandal_name = st.text_input("ಗಣೇಶೋತ್ಸವ ಸಮಿತಿಯ ಹೆಸರು :", placeholder="ಉದಾ: ಶ್ರೀ ವಿನಾಯಕ ಯುವಕ ಮಂಡಳಿ")
+        location_address = st.text_input("ಪ್ರತಿಷ್ಠಾಪನೆಯಾಗುವ ಸ್ಥಳ :", placeholder="ಉದಾ: ಬಸ್ ನಿಲ್ದಾಣದ ಹತ್ತಿರ")
 
         col_beat, col_staff = st.columns(2)
         beat_number = col_beat.number_input("ಬೀಟ್ ನಂಬರ :", min_value=1, max_value=100, value=1)
-        beat_staff_details = col_staff.text_input("ಬೀಟ್ ಸಿಬ್ಬಂದಿ ಮೊಬೈಲ್ ನಂಬರ ಹೆಸರು ಮೊ ನಂ :")
+        beat_staff_details = col_staff.text_input("ಬೀಟ್ ಸಿಬ್ಬಂದಿ ವಿವರ (ಹೆಸರು, ಮೊಬೈಲ್ ನಂ) :", placeholder="ಉದಾ: ಹೆಚ್‌ಸಿ 452 ರಮೇಶ್, 9876543210")
 
         install_date = st.date_input(
             "ಗಣೇಶ ಪ್ರತಿಷ್ಠಾಪನ ದಿನಾಂಕ :", 
@@ -225,12 +238,12 @@ elif role == "ಠಾಣಾ ಬರಹಗಾರರು (Station Writer)":
         )
 
         col_p1, col_p2 = st.columns(2)
-        president_name = col_p1.text_input("ಕಮಿಟಿ ಅಧ್ಯಕ್ಷರ ಹೆಸರು :")
-        president_phone = col_p2.text_input("ಮೊಬೈಲ್ ನಂ (ಅಧ್ಯಕ್ಷರು) :")
+        president_name = col_p1.text_input("ಕಮಿಟಿ ಅಧ್ಯಕ್ಷರ ಹೆಸರು :", placeholder="ಅಧ್ಯಕ್ಷರ ಹೆಸರು")
+        president_phone = col_p2.text_input("ಮೊಬೈಲ್ ನಂ (ಅಧ್ಯಕ್ಷರು) :", placeholder="9876543210")
 
         col_v1, col_v2 = st.columns(2)
-        vice_president_name = col_v1.text_input("ಕಮಿಟಿ ಉಪಾಧ್ಯಕ್ಷರ ಹೆಸರು :")
-        vice_president_phone = col_v2.text_input("ಮೊಬೈಲ್ ನಂ (ಉಪಾಧ್ಯಕ್ಷರು) :")
+        vice_president_name = col_v1.text_input("ಕಮಿಟಿ ಉಪಾಧ್ಯಕ್ಷರ ಹೆಸರು :", placeholder="ಉಪಾಧ್ಯಕ್ಷರ ಹೆಸರು")
+        vice_president_phone = col_v2.text_input("ಮೊಬೈಲ್ ನಂ (ಉಪಾಧ್ಯಕ್ಷರು) :", placeholder="9876543210")
 
         sensitivity_level = st.selectbox("ವರ್ಗ :", ["ಸಾಮಾನ್ಯ", "ಸೂಕ್ಷ್ಮ", "ಅತೀಸೂಕ್ಷ್ಮ"])
 
@@ -242,12 +255,12 @@ elif role == "ಠಾಣಾ ಬರಹಗಾರರು (Station Writer)":
 
         sensitive_route_details = st.text_area(
             "ಮಾರ್ಗಮಧ್ಯದಲ್ಲಿರುವ ಮಸೀದಿ ಹಾಗೂ ಚರ್ಚಗಳ ವಿವರ :", 
-            help="20-30 ಅಕ್ಷರಗಳಲ್ಲಿ ವಿವರ ನಮೂದಿಸಿ"
+            placeholder="20-30 ಅಕ್ಷರಗಳಲ್ಲಿ ಕನ್ನಡದಲ್ಲಿ ವಿವರಗಳನ್ನು ಇಲ್ಲಿ ಟೈಪ್ ಮಾಡಿ..."
         )
 
         past_incident_details = st.text_area(
             "ಈ ಹಿಂದೆ ನಡೆದ ಘಟನೆ/ಪ್ರಕರಣಗಳ ವಿವರ :", 
-            help="20-30 ಅಕ್ಷರಗಳಲ್ಲಿ ವಿವರ ನಮೂದಿಸಿ"
+            placeholder="20-30 ಅಕ್ಷರಗಳಲ್ಲಿ ವಿವರಗಳನ್ನು ಇಲ್ಲಿ ಟೈಪ್ ಮಾಡಿ..."
         )
 
         submit_btn = st.form_submit_button("ಮಾಹಿತಿ ಸಲ್ಲಿಸಿ (Submit Record)")
@@ -258,19 +271,19 @@ elif role == "ಠಾಣಾ ಬರಹಗಾರರು (Station Writer)":
             else:
                 record = {
                     "station_name": selected_stn,
-                    "pandal_name": pandal_name,
-                    "location_address": location_address,
+                    "pandal_name": str(pandal_name).strip(),
+                    "location_address": str(location_address).strip(),
                     "beat_number": beat_number,
-                    "beat_staff_details": beat_staff_details,
+                    "beat_staff_details": str(beat_staff_details).strip(),
                     "installation_date": install_date.strftime("%d/%m/%Y"),
-                    "president_name": president_name,
-                    "president_phone": president_phone,
-                    "vice_president_name": vice_president_name,
-                    "vice_president_phone": vice_president_phone,
+                    "president_name": str(president_name).strip(),
+                    "president_phone": str(president_phone).strip(),
+                    "vice_president_name": str(vice_president_name).strip(),
+                    "vice_president_phone": str(vice_president_phone).strip(),
                     "sensitivity_level": sensitivity_level,
                     "immersion_date": immersion_date.strftime("%d/%m/%Y"),
-                    "sensitive_route_details": sensitive_route_details,
-                    "past_incident_details": past_incident_details
+                    "sensitive_route_details": str(sensitive_route_details).strip(),
+                    "past_incident_details": str(past_incident_details).strip()
                 }
                 supabase.table("ganesh_idols").insert(record).execute()
                 st.success("ವಿವರಗಳನ್ನು ಯಶಸ್ವಿಯಾಗಿ ನಮೂದಿಸಲಾಗಿದೆ!")
