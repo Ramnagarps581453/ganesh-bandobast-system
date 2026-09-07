@@ -93,18 +93,23 @@ if role == "Division Control Dashboard":
     col_date, col_stn = st.columns(2)
     
     with col_date:
-        today_str = datetime.date.today().strftime("%d/%m/%Y")
+        today_str = datetime.date.today().strftime("%Y-%m-%d")
         if not df_all.empty and "immersion_date" in df_all.columns:
             raw_dates = df_all["immersion_date"].dropna().unique().tolist()
             valid_dates = []
             for d in raw_dates:
                 try:
-                    parsed_d = datetime.datetime.strptime(d, "%d/%m/%Y").date()
+                    # Parse standard YYYY-MM-DD date
+                    if isinstance(d, str) and "-" in d:
+                        parsed_d = datetime.datetime.strptime(d, "%Y-%m-%d").date()
+                    else:
+                        parsed_d = datetime.datetime.strptime(d, "%d/%m/%Y").date()
+                        
                     if parsed_d >= datetime.date.today():
-                        valid_dates.append(d)
+                        valid_dates.append(str(parsed_d))
                 except ValueError:
-                    valid_dates.append(d)
-            date_options = ["All Dates"] + sorted(valid_dates)
+                    valid_dates.append(str(d))
+            date_options = ["All Dates"] + sorted(list(set(valid_dates)))
         else:
             date_options = ["All Dates"]
             
@@ -275,13 +280,15 @@ elif role == "ಠಾಣಾ ಬರಹಗಾರರು (Station Writer)":
                     "location_address": str(location_address).strip() if location_address else "",
                     "beat_number": int(beat_number),
                     "beat_staff_details": str(beat_staff_details).strip() if beat_staff_details else "",
-                    "installation_date": install_date.strftime("%d/%m/%Y"),
+                    # Format as YYYY-MM-DD for PostgreSQL DATE columns
+                    "installation_date": install_date.strftime("%Y-%m-%d"),
                     "president_name": str(president_name).strip() if president_name else "",
                     "president_phone": str(president_phone).strip() if president_phone else "",
-                    "vice_president_name": str(vice_president_name).strip() if vice_president_phone else "",
+                    "vice_president_name": str(vice_president_name).strip() if vice_president_name else "",
                     "vice_president_phone": str(vice_president_phone).strip() if vice_president_phone else "",
                     "sensitivity_level": str(sensitivity_level),
-                    "immersion_date": immersion_date.strftime("%d/%m/%Y"),
+                    # Format as YYYY-MM-DD for PostgreSQL DATE columns
+                    "immersion_date": immersion_date.strftime("%Y-%m-%d"),
                     "sensitive_route_details": str(sensitive_route_details).strip() if sensitive_route_details else "",
                     "past_incident_details": str(past_incident_details).strip() if past_incident_details else ""
                 }
