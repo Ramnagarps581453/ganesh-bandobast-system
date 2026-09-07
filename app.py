@@ -48,15 +48,22 @@ def generate_pdf(dataframe):
     elements.extend([title, subtitle, Spacer(1, 12)])
     
     if not dataframe.empty:
-        data = [dataframe.columns.tolist()] + dataframe.values.tolist()
-        table = Table(data)
+        # Format table headers and convert cell values to Paragraphs for clean text wrapping
+        headers = [Paragraph(f"<b>{col}</b>", styles['Normal']) for col in dataframe.columns]
+        table_data = [headers]
+        
+        for _, row in dataframe.iterrows():
+            formatted_row = [Paragraph(str(val) if val is not None else "", styles['Normal']) for val in row]
+            table_data.append(formatted_row)
+        
+        table = Table(table_data)
         table.setStyle(TableStyle([
             ('BACKGROUND', (0,0), (-1,0), colors.grey),
             ('TEXTCOLOR', (0,0), (-1,0), colors.whitesmoke),
-            ('ALIGN', (0,0), (-1,-1), 'Center'),
-            ('FONTNAME', (0,0), (-1,0), 'Helvetica-Bold'),
-            ('BOTTOMPADDING', (0,0), (-1,0), 12),
-            ('GRID', (0,0), (-1,-1), 1, colors.black),
+            ('ALIGN', (0,0), (-1,-1), 'CENTER'),  # Fixed: Must be uppercase 'CENTER'
+            ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
+            ('BOTTOMPADDING', (0,0), (-1,0), 8),
+            ('GRID', (0,0), (-1,-1), 0.5, colors.black),
         ]))
         elements.append(table)
     
