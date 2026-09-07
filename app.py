@@ -270,24 +270,27 @@ elif role == "ಠಾಣಾ ಬರಹಗಾರರು (Station Writer)":
                 st.warning("ದಯವಿಟ್ಟು ಗಣೇಶೋತ್ಸವ ಸಮಿತಿಯ ಹೆಸರನ್ನು ನಮೂದಿಸಿ.")
             else:
                 record = {
-                    "station_name": selected_stn,
+                    "station_name": str(selected_stn),
                     "pandal_name": str(pandal_name).strip(),
-                    "location_address": str(location_address).strip(),
-                    "beat_number": beat_number,
-                    "beat_staff_details": str(beat_staff_details).strip(),
+                    "location_address": str(location_address).strip() if location_address else "",
+                    "beat_number": int(beat_number),
+                    "beat_staff_details": str(beat_staff_details).strip() if beat_staff_details else "",
                     "installation_date": install_date.strftime("%d/%m/%Y"),
-                    "president_name": str(president_name).strip(),
-                    "president_phone": str(president_phone).strip(),
-                    "vice_president_name": str(vice_president_name).strip(),
-                    "vice_president_phone": str(vice_president_phone).strip(),
-                    "sensitivity_level": sensitivity_level,
+                    "president_name": str(president_name).strip() if president_name else "",
+                    "president_phone": str(president_phone).strip() if president_phone else "",
+                    "vice_president_name": str(vice_president_name).strip() if vice_president_phone else "",
+                    "vice_president_phone": str(vice_president_phone).strip() if vice_president_phone else "",
+                    "sensitivity_level": str(sensitivity_level),
                     "immersion_date": immersion_date.strftime("%d/%m/%Y"),
-                    "sensitive_route_details": str(sensitive_route_details).strip(),
-                    "past_incident_details": str(past_incident_details).strip()
+                    "sensitive_route_details": str(sensitive_route_details).strip() if sensitive_route_details else "",
+                    "past_incident_details": str(past_incident_details).strip() if past_incident_details else ""
                 }
-                supabase.table("ganesh_idols").insert(record).execute()
-                st.success("ವಿವರಗಳನ್ನು ಯಶಸ್ವಿಯಾಗಿ ನಮೂದಿಸಲಾಗಿದೆ!")
-                st.rerun()
+                try:
+                    supabase.table("ganesh_idols").insert(record).execute()
+                    st.success("ವಿವರಗಳನ್ನು ಯಶಸ್ವಿಯಾಗಿ ನಮೂದಿಸಲಾಗಿದೆ!")
+                    st.rerun()
+                except Exception as db_err:
+                    st.error(f"ಡೇಟಾಬೇಸ್‌ನಲ್ಲಿ ದಾಖಲಿಸಲು ಸಾಧ್ಯವಾಗಿಲ್ಲ: {db_err}")
 
 # ==========================================
 # 3. BEAT STAFF FIELD UPDATE INTERFACE
