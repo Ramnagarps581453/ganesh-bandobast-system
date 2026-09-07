@@ -3,20 +3,22 @@ from supabase import create_client, Client
 import datetime
 import pandas as pd
 from io import BytesIO
+import urllib.request
 
-# Safe import for ReportLab
+# Safe import for ReportLab & Kannada Font Registration
 try:
     from reportlab.lib.pagesizes import letter
     from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle
     from reportlab.lib.styles import getSampleStyleSheet
     from reportlab.lib import colors
+    from reportlab.pdfbase import pdfmetrics
+    from reportlab.pdfbase.ttfonts import TTFont
     REPORTLAB_AVAILABLE = True
 except ImportError:
     REPORTLAB_AVAILABLE = False
 
 st.set_page_config(
     page_title="Ganesh Bandobast Digital Monitoring System",
-    page_icon="🐘",
     layout="wide"
 )
 
@@ -33,13 +35,7 @@ except Exception as e:
     st.error(f"ಸಂಪರ್ಕ ದೋಷ (Connection Error): {e}")
     st.stop()
 
-# Helper function to generate PDF Report
-def generate_pdf(dataframe):
-    import urllib.request
-from reportlab.pdfbase import pdfmetrics
-from reportlab.pdfbase.ttfonts import TTFont
-
-# Register a Unicode font capable of rendering Kannada glyphs
+# Helper function to load Kannada font for PDF export
 @st.cache_resource
 def load_kannada_font():
     font_url = "https://github.com/google/fonts/raw/main/ofl/notosanskannada/NotoSansKannada-Regular.ttf"
@@ -51,6 +47,7 @@ def load_kannada_font():
     except Exception:
         return 'Helvetica'
 
+# Helper function to generate PDF Report
 def generate_pdf(dataframe):
     if not REPORTLAB_AVAILABLE:
         return None
@@ -97,43 +94,10 @@ def generate_pdf(dataframe):
     doc.build(elements)
     buffer.seek(0)
     return buffer
-    
-    buffer = BytesIO()
-    doc = SimpleDocTemplate(buffer, pagesize=letter)
-    elements = []
-    
-    styles = getSampleStyleSheet()
-    title = Paragraph("<b>Ganesh Bandobast Digital Monitoring System</b>", styles['Title'])
-    subtitle = Paragraph("<b>Division Control Report</b>", styles['Heading2'])
-    elements.extend([title, subtitle, Spacer(1, 12)])
-    
-    if not dataframe.empty:
-        # Format table headers and convert cell values to Paragraphs for clean text wrapping
-        headers = [Paragraph(f"<b>{col}</b>", styles['Normal']) for col in dataframe.columns]
-        table_data = [headers]
-        
-        for _, row in dataframe.iterrows():
-            formatted_row = [Paragraph(str(val) if val is not None else "", styles['Normal']) for val in row]
-            table_data.append(formatted_row)
-        
-        table = Table(table_data)
-        table.setStyle(TableStyle([
-            ('BACKGROUND', (0,0), (-1,0), colors.grey),
-            ('TEXTCOLOR', (0,0), (-1,0), colors.whitesmoke),
-            ('ALIGN', (0,0), (-1,-1), 'CENTER'),  # Fixed: Must be uppercase 'CENTER'
-            ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
-            ('BOTTOMPADDING', (0,0), (-1,0), 8),
-            ('GRID', (0,0), (-1,-1), 0.5, colors.black),
-        ]))
-        elements.append(table)
-    
-    doc.build(elements)
-    buffer.seek(0)
-    return buffer
 
-# Main Title with Logos
+# Main Title Clean
 st.markdown(
-    "<h1 style='text-align: center;'>🐘 Ganesh Bandobast Digital Monitoring System 🐘</h1>", 
+    "<h1 style='text-align: center;'>Ganesh Bandobast Digital Monitoring System</h1>", 
     unsafe_allow_html=True
 )
 
@@ -141,6 +105,9 @@ role = st.sidebar.selectbox(
     "ಪಾತ್ರವನ್ನು ಆಯ್ಕೆಮಾಡಿ (Select Role)", 
     ["Division Control Dashboard", "ಠಾಣಾ ಬರಹಗಾರರು (Station Writer)", "ಬೀಟ್ ಸಿಬ್ಬಂದಿ (Beat Staff)"]
 )
+
+# Admin Password Retrieval
+ADMIN_PASSWORD = st.secrets.get("ADMIN_PASSWORD", "admin")
 
 # ==========================================
 # 1. DIVISION CONTROL DASHBOARD
@@ -157,6 +124,11 @@ if role == "Division Control Dashboard":
 
     df_all = pd.DataFrame(all_idols) if all_idols else pd.DataFrame()
 
+    # Reorder columns so 'id' (SP Office Number) is the first column
+    if not df_all.empty and "id" in df_all.columns:
+        cols = ["id"] + [c for c in df_all.columns if c != "id"]
+        df_all = df_all[cols]
+
     col_date, col_stn = st.columns(2)
     
     with col_date:
@@ -166,7 +138,6 @@ if role == "Division Control Dashboard":
             valid_dates = []
             for d in raw_dates:
                 try:
-                    # Parse standard YYYY-MM-DD date
                     if isinstance(d, str) and "-" in d:
                         parsed_d = datetime.datetime.strptime(d, "%Y-%m-%d").date()
                     else:
@@ -221,7 +192,8 @@ if role == "Division Control Dashboard":
     st.subheader("View PDF Report")
     if REPORTLAB_AVAILABLE:
         if not filtered_df.empty:
-            pdf_data = generate_pdf(filtered_df[['station_name', 'pandal_name', 'sensitivity_level', 'immersion_date', 'immersion_status']])
+            cols_to_print = [c for c in ['id', 'station_name', 'pandal_name', 'sensitivity_level', 'immersion_date', 'immersion_status'] if c in filtered_df.columns]
+            pdf_data = generate_pdf(filtered_df[cols_to_print])
             st.download_button(
                 label="📄 PDF ವರದಿ ಡೌನ್‌ಲೋಡ್ ಮಾಡಿ (Download PDF Report)",
                 data=pdf_data,
@@ -231,7 +203,7 @@ if role == "Division Control Dashboard":
         else:
             st.info("ವರದಿ ರಚಿಸಲು ಯಾವುದೇ ಡೇಟಾ ಲಭ್ಯವಿಲ್ಲ.")
     else:
-        st.warning("`reportlab` ಲೈಬ್ರರಿಯನ್ನು ಇನ್‌ಸ್ಟಾಲ್ ಮಾಡಲಾಗುತ್ತಿದೆ... `requirements.txt` ಅಪ್‌ಡೇಟ್ ಮಾಡಿ.")
+        st.warning("`reportlab` ಲೈಬ್ರರಿ ಲಭ್ಯವಿಲ್ಲ.")
 
     st.markdown("---")
 
@@ -241,12 +213,55 @@ if role == "Division Control Dashboard":
     else:
         st.write("ಯಾವುದೇ ವಿವರಗಳು ಲಭ್ಯವಿಲ್ಲ.")
 
+    # ==========================================
+    # ADMIN LOGIN & DELETE SECTION
+    # ==========================================
+    st.markdown("---")
+    st.subheader("🔑 Admin Controls & Record Management")
+    
+    if "admin_logged_in" not in st.session_state:
+        st.session_state["admin_logged_in"] = False
+
+    if not st.session_state["admin_logged_in"]:
+        with st.expander("Admin Login (To Delete Records)"):
+            pwd = st.text_input("Enter Admin Password:", type="password")
+            if st.button("Login as Admin"):
+                if pwd == ADMIN_PASSWORD:
+                    st.session_state["admin_logged_in"] = True
+                    st.success("Admin Login Successful!")
+                    st.rerun()
+                else:
+                    st.error("Incorrect Password.")
+    else:
+        st.success("🔓 Admin Mode Active")
+        if st.button("Logout Admin"):
+            st.session_state["admin_logged_in"] = False
+            st.rerun()
+
+        st.markdown("### 🗑️ Delete Record")
+        if not df_all.empty and "id" in df_all.columns:
+            record_to_delete = st.selectbox(
+                "Select Record to Delete (Search by SP Office Unique ID / Pandal Name):",
+                df_all["id"].tolist(),
+                format_func=lambda x: f"ID: {x} - {df_all[df_all['id'] == x]['pandal_name'].values[0] if not df_all[df_all['id'] == x].empty else ''}"
+            )
+            
+            if st.button("❌ Remove Selected Record", type="primary"):
+                try:
+                    supabase.table("ganesh_idols").delete().eq("id", record_to_delete).execute()
+                    st.success(f"Record '{record_to_delete}' successfully removed!")
+                    st.rerun()
+                except Exception as del_err:
+                    st.error(f"Error removing record: {del_err}")
+        else:
+            st.info("No records available to delete.")
+
 # ==========================================
-# 2. STATION WRITER INTERFACE (Kannada / Unicode Input)
+# 2. STATION WRITER INTERFACE
 # ==========================================
 elif role == "ಠಾಣಾ ಬರಹಗಾರರು (Station Writer)":
     st.markdown("<h2 style='text-align: center; color: #800000;'>ಠಾಣಾ ಬರಹಗಾರರ ಡ್ಯಾಶ್‌ಬೋರ್ಡ್</h2>", unsafe_allow_html=True)
-    st.caption("ಸೂಚನೆ: ಈ ಕೆಳಗಿನ ಎಲ್ಲಾ ವಿವರಗಳನ್ನು ಯುನಿಕೋಡ್ ಕನ್ನಡದಲ್ಲಿ (Kannada Unicode / Indic Keyboard) ನೇರವಾಗಿ ಟೈಪ್ ಮಾಡಬಹುದು.")
+    st.caption("💡 ಸೂಚನೆ: ಈ ಕೆಳಗಿನ ಎಲ್ಲಾ ವಿವರಗಳನ್ನು ಯುನಿಕೋಡ್ ಕನ್ನಡದಲ್ಲಿ (Kannada Unicode / Indic Keyboard) ನೇರವಾಗಿ ಟೈಪ್ ಮಾಡಬಹುದು.")
     
     default_stations = ["Haliyal", "Dandeli Town", "Dandeli Rural", "Ambikanagar", "Ramanagar", "Joida"]
     try:
@@ -294,8 +309,9 @@ elif role == "ಠಾಣಾ ಬರಹಗಾರರು (Station Writer)":
 
     st.markdown("---")
 
-    # Form accepting Unicode Kannada text directly
+    # Form accepting SP Office Unique ID & Unicode Kannada text
     with st.form("station_writer_form"):
+        sp_unique_id = st.text_input("ಜಿಲ್ಲಾ ಕಚೇರಿಯಿಂದ ನೀಡಲಾದ ಸಂಖ್ಯೆ (SP Office Unique ID) :", placeholder="ಉದಾ: SP/GNS/2026/01")
         pandal_name = st.text_input("ಗಣೇಶೋತ್ಸವ ಸಮಿತಿಯ ಹೆಸರು :", placeholder="ಉದಾ: ಶ್ರೀ ವಿನಾಯಕ ಯುವಕ ಮಂಡಳಿ")
         location_address = st.text_input("ಪ್ರತಿಷ್ಠಾಪನೆಯಾಗುವ ಸ್ಥಳ :", placeholder="ಉದಾ: ಬಸ್ ನಿಲ್ದಾಣದ ಹತ್ತಿರ")
 
@@ -327,41 +343,47 @@ elif role == "ಠಾಣಾ ಬರಹಗಾರರು (Station Writer)":
 
         sensitive_route_details = st.text_area(
             "ಮಾರ್ಗಮಧ್ಯದಲ್ಲಿರುವ ಮಸೀದಿ ಹಾಗೂ ಚರ್ಚಗಳ ವಿವರ :", 
-            placeholder="20-30 ಅಕ್ಷರಗಳಲ್ಲಿ ಕನ್ನಡದಲ್ಲಿ ವಿವರಗಳನ್ನು ಇಲ್ಲಿ ಟೈಪ್ ಮಾಡಿ..."
+            placeholder="ವಿವರಗಳನ್ನು ಇಲ್ಲಿ ಟೈಪ್ ಮಾಡಿ..."
         )
 
         past_incident_details = st.text_area(
             "ಈ ಹಿಂದೆ ನಡೆದ ಘಟನೆ/ಪ್ರಕರಣಗಳ ವಿವರ :", 
-            placeholder="20-30 ಅಕ್ಷರಗಳಲ್ಲಿ ವಿವರಗಳನ್ನು ಇಲ್ಲಿ ಟೈಪ್ ಮಾಡಿ..."
+            placeholder="ವಿವರಗಳನ್ನು ಇಲ್ಲಿ ಟೈಪ್ ಮಾಡಿ..."
         )
 
         submit_btn = st.form_submit_button("ಮಾಹಿತಿ ಸಲ್ಲಿಸಿ (Submit Record)")
 
         if submit_btn:
-            if not pandal_name.strip():
+            if not sp_unique_id.strip():
+                st.warning("ದಯವಿಟ್ಟು 'ಜಿಲ್ಲಾ ಕಚೇರಿಯಿಂದ ನೀಡಲಾದ ಸಂಖ್ಯೆ'ಯನ್ನು ನಮೂದಿಸಿ.")
+            elif not pandal_name.strip():
                 st.warning("ದಯವಿಟ್ಟು ಗಣೇಶೋತ್ಸವ ಸಮಿತಿಯ ಹೆಸರನ್ನು ನಮೂದಿಸಿ.")
             else:
                 record = {
+                    "id": str(sp_unique_id).strip(),
                     "station_name": str(selected_stn),
                     "pandal_name": str(pandal_name).strip(),
                     "location_address": str(location_address).strip() if location_address else "",
                     "beat_number": int(beat_number),
                     "beat_staff_details": str(beat_staff_details).strip() if beat_staff_details else "",
-                    # Format as YYYY-MM-DD for PostgreSQL DATE columns
                     "installation_date": install_date.strftime("%Y-%m-%d"),
                     "president_name": str(president_name).strip() if president_name else "",
                     "president_phone": str(president_phone).strip() if president_phone else "",
                     "vice_president_name": str(vice_president_name).strip() if vice_president_name else "",
                     "vice_president_phone": str(vice_president_phone).strip() if vice_president_phone else "",
                     "sensitivity_level": str(sensitivity_level),
-                    # Format as YYYY-MM-DD for PostgreSQL DATE columns
                     "immersion_date": immersion_date.strftime("%Y-%m-%d"),
                     "sensitive_route_details": str(sensitive_route_details).strip() if sensitive_route_details else "",
                     "past_incident_details": str(past_incident_details).strip() if past_incident_details else ""
                 }
                 try:
                     supabase.table("ganesh_idols").insert(record).execute()
-                    st.success("ವಿವರಗಳನ್ನು ಯಶಸ್ವಿಯಾಗಿ ನಮೂದಿಸಲಾಗಿದೆ!")
+                    
+                    # Calculate updated remaining count
+                    updated_entered = entered_val + 1
+                    updated_remaining = max(0, target_val - updated_entered) if target_val > 0 else 0
+                    
+                    st.success(f"ನಿಮ್ಮ ವಿವರಗಳನ್ನು ಸಲ್ಲಿಸಲಾಗಿದೆ. ಮಾಹಿತಿ ಸಲ್ಲಿಸಲು ಬಾಕಿ ಇರುವ ಗಣೇಶ ಮೂರ್ತಿಗಳ ವಿವರ: {updated_remaining}")
                     st.rerun()
                 except Exception as db_err:
                     st.error(f"ಡೇಟಾಬೇಸ್‌ನಲ್ಲಿ ದಾಖಲಿಸಲು ಸಾಧ್ಯವಾಗಿಲ್ಲ: {db_err}")
@@ -382,10 +404,11 @@ elif role == "ಬೀಟ್ ಸಿಬ್ಬಂದಿ (Beat Staff)":
     if not idols_in_beat:
         st.info("ಈ ಬೀಟ್‌ನಲ್ಲಿ ಯಾವುದೇ ಗಣೇಶ ಮೂರ್ತಿಗಳು ನೋಂದಾಯಿಸಲ್ಪಟ್ಟಿಲ್ಲ.")
     else:
-        pandal_options = {f"{i['pandal_name']} ({i.get('sensitivity_level', 'ಸಾಮಾನ್ಯ')})": i for i in idols_in_beat}
+        pandal_options = {f"[{i.get('id', 'N/A')}] {i['pandal_name']} ({i.get('sensitivity_level', 'ಸಾಮಾನ್ಯ')})": i for i in idols_in_beat}
         selected_key = st.selectbox("ಗಣೇಶ ಮಂಡಳಿಯನ್ನು ಆಯ್ಕೆಮಾಡಿ", list(pandal_options.keys()))
         selected_idol = pandal_options[selected_key]
         
+        st.write(f"**ಜಿಲ್ಲಾ ಕಚೇರಿ ನೀಡಿದ ಸಂಖ್ಯೆ (ID):** {selected_idol.get('id', 'N/A')}")
         st.write(f"**ವರ್ಗ (Category):** {selected_idol.get('sensitivity_level', 'ಸಾಮಾನ್ಯ')}")
         st.write(f"**ಸ್ಥಳ:** {selected_idol.get('location_address', '')}")
         st.write(f"**ವಿಸರ್ಜನೆ ದಿನಾಂಕ:** {selected_idol.get('immersion_date', '')}")
