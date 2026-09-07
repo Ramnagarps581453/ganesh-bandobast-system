@@ -35,8 +35,68 @@ except Exception as e:
 
 # Helper function to generate PDF Report
 def generate_pdf(dataframe):
+    import urllib.request
+from reportlab.pdfbase import pdfmetrics
+from reportlab.pdfbase.ttfonts import TTFont
+
+# Register a Unicode font capable of rendering Kannada glyphs
+@st.cache_resource
+def load_kannada_font():
+    font_url = "https://github.com/google/fonts/raw/main/ofl/notosanskannada/NotoSansKannada-Regular.ttf"
+    font_path = "NotoSansKannada-Regular.ttf"
+    try:
+        urllib.request.urlretrieve(font_url, font_path)
+        pdfmetrics.registerFont(TTFont('KannadaFont', font_path))
+        return 'KannadaFont'
+    except Exception:
+        return 'Helvetica'
+
+def generate_pdf(dataframe):
     if not REPORTLAB_AVAILABLE:
         return None
+    
+    font_name = load_kannada_font()
+    buffer = BytesIO()
+    doc = SimpleDocTemplate(buffer, pagesize=letter)
+    elements = []
+    
+    styles = getSampleStyleSheet()
+    
+    # Custom style using the registered Kannada font
+    kannada_style = styles['Normal'].clone('KannadaStyle')
+    kannada_style.fontName = font_name
+    kannada_style.fontSize = 9
+    kannada_style.leading = 12
+
+    title_style = styles['Title'].clone('KannadaTitleStyle')
+    title_style.fontName = font_name
+
+    title = Paragraph("<b>Ganesh Bandobast Digital Monitoring System</b>", title_style)
+    subtitle = Paragraph("<b>Division Control Report</b>", styles['Heading2'])
+    elements.extend([title, subtitle, Spacer(1, 12)])
+    
+    if not dataframe.empty:
+        headers = [Paragraph(f"<b>{col}</b>", kannada_style) for col in dataframe.columns]
+        table_data = [headers]
+        
+        for _, row in dataframe.iterrows():
+            formatted_row = [Paragraph(str(val) if val is not None else "", kannada_style) for val in row]
+            table_data.append(formatted_row)
+        
+        table = Table(table_data)
+        table.setStyle(TableStyle([
+            ('BACKGROUND', (0,0), (-1,0), colors.grey),
+            ('TEXTCOLOR', (0,0), (-1,0), colors.whitesmoke),
+            ('ALIGN', (0,0), (-1,-1), 'CENTER'),
+            ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
+            ('BOTTOMPADDING', (0,0), (-1,0), 8),
+            ('GRID', (0,0), (-1,-1), 0.5, colors.black),
+        ]))
+        elements.append(table)
+    
+    doc.build(elements)
+    buffer.seek(0)
+    return buffer
     
     buffer = BytesIO()
     doc = SimpleDocTemplate(buffer, pagesize=letter)
