@@ -135,38 +135,6 @@ if role == "Division Control Dashboard":
     c2.metric("🟡 ಸೂಕ್ಷ್ಮ (Sensitive)", v_sens)
     c3.metric("🟢 ಸಾಮಾನ್ಯ (Normal)", v_norm)
 
-    # ==========================================
-    # DIVISION CONTROL: SET STATION TARGETS
-    # ==========================================
-    st.markdown("---")
-    st.subheader("🎯 ಠಾಣಾವಾರು ಗಣೇಶ ಮೂರ್ತಿಗಳ ನಿಗದಿತ ಸಂಖ್ಯೆ (Set Police Station Targets)")
-    st.caption("ವಿಭಾಗೀಯ ಕಚೇರಿಯಿಂದ ಪ್ರತಿಯೊಂದು ಪೋಲಿಸ್ ಠಾಣೆಗೆ ಒಟ್ಟು ಗಣೇಶ ಮೂರ್ತಿಗಳ ಸಂಖ್ಯೆಯನ್ನು ಇಲ್ಲಿ ನಮೂದಿಸಿ.")
-
-    col_target_stn, col_target_num, col_target_btn = st.columns([2, 2, 1])
-    
-    with col_target_stn:
-        target_stn_choice = st.selectbox("ಪೋಲಿಸ್ ಠಾಣೆ ಆಯ್ಕೆಮಾಡಿ:", sorted(all_stns), key="div_target_stn")
-        
-    # Retrieve current saved target for chosen station
-    try:
-        res_t = supabase.table("station_targets").select("target_count").eq("station_name", target_stn_choice).execute()
-        current_t_val = res_t.data[0]["target_count"] if res_t.data else 10
-    except Exception:
-        current_t_val = 10
-
-    with col_target_num:
-        set_target_val = st.number_input("ಒಟ್ಟು ನಿಗದಿತ ಗಣೇಶ ಮೂರ್ತಿಗಳ ಸಂಖ್ಯೆ:", min_value=1, max_value=1000, value=current_t_val, key="div_target_val")
-
-    with col_target_btn:
-        st.markdown("<br>", unsafe_allow_html=True)
-        if st.button("ಸಂಖ್ಯೆ ಉಳಿಸಿ (Save Target)", type="primary"):
-            try:
-                supabase.table("station_targets").upsert({"station_name": target_stn_choice, "target_count": set_target_val}).execute()
-                st.success(f"{target_stn_choice} ಠಾಣೆಗೆ {set_target_val} ಮೂರ್ತಿಗಳ ಸಂಖ್ಯೆಯನ್ನು ಉಳಿಸಲಾಗಿದೆ!")
-                st.rerun()
-            except Exception as e:
-                st.error(f"Error saving target: {e}")
-
     st.markdown("---")
 
     # Excel Download
@@ -193,7 +161,7 @@ if role == "Division Control Dashboard":
     else:
         st.write("ಯಾವುದೇ ವಿವರಗಳು ಲಭ್ಯವಿಲ್ಲ.")
 
-    # Admin Login & Delete Section
+    # Admin Login, Target Setting & Delete Section
     st.markdown("---")
     st.subheader("🔑 Admin Controls & Record Management")
     
@@ -201,7 +169,7 @@ if role == "Division Control Dashboard":
         st.session_state["admin_logged_in"] = False
 
     if not st.session_state["admin_logged_in"]:
-        with st.expander("Admin Login (To Delete Records)"):
+        with st.expander("Admin Login (To Manage Targets & Delete Records)"):
             pwd = st.text_input("Enter Admin Password:", type="password")
             if st.button("Login as Admin"):
                 if pwd == ADMIN_PASSWORD:
@@ -216,6 +184,39 @@ if role == "Division Control Dashboard":
             st.session_state["admin_logged_in"] = False
             st.rerun()
 
+        # ==========================================
+        # DIVISION CONTROL: SET STATION TARGETS (VISIBLE ONLY FOR ADMIN)
+        # ==========================================
+        st.markdown("---")
+        st.subheader("🎯 ಠಾಣಾವಾರು ಗಣೇಶ ಮೂರ್ತಿಗಳ ನಿಗದಿತ ಸಂಖ್ಯೆ (Set Police Station Targets)")
+        st.caption("ವಿಭಾಗೀಯ ಕಚೇರಿಯಿಂದ ಪ್ರತಿಯೊಂದು ಪೋಲಿಸ್ ಠಾಣೆಗೆ ಒಟ್ಟು ಗಣೇಶ ಮೂರ್ತಿಗಳ ಸಂಖ್ಯೆಯನ್ನು ಇಲ್ಲಿ ನಮೂದಿಸಿ.")
+
+        col_target_stn, col_target_num, col_target_btn = st.columns([2, 2, 1])
+        
+        with col_target_stn:
+            target_stn_choice = st.selectbox("ಪೋಲಿಸ್ ಠಾಣೆ ಆಯ್ಕೆಮಾಡಿ:", sorted(all_stns), key="div_target_stn")
+            
+        # Retrieve current saved target for chosen station
+        try:
+            res_t = supabase.table("station_targets").select("target_count").eq("station_name", target_stn_choice).execute()
+            current_t_val = res_t.data[0]["target_count"] if res_t.data else 10
+        except Exception:
+            current_t_val = 10
+
+        with col_target_num:
+            set_target_val = st.number_input("ಒಟ್ಟು ನಿಗದಿತ ಗಣೇಶ ಮೂರ್ತಿಗಳ ಸಂಖ್ಯೆ:", min_value=1, max_value=1000, value=current_t_val, key="div_target_val")
+
+        with col_target_btn:
+            st.markdown("<br>", unsafe_allow_html=True)
+            if st.button("ಸಂಖ್ಯೆ ಉಳಿಸಿ (Save Target)", type="primary"):
+                try:
+                    supabase.table("station_targets").upsert({"station_name": target_stn_choice, "target_count": set_target_val}).execute()
+                    st.success(f"{target_stn_choice} ಠಾಣೆಗೆ {set_target_val} ಮೂರ್ತಿಗಳ ಸಂಖ್ಯೆಯನ್ನು ಉಳಿಸಲಾಗಿದೆ!")
+                    st.rerun()
+                except Exception as e:
+                    st.error(f"Error saving target: {e}")
+
+        st.markdown("---")
         st.markdown("### 🗑️ Delete Record")
         if not df_all.empty and "id" in df_all.columns:
             record_to_delete = st.selectbox(
