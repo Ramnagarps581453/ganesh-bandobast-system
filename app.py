@@ -132,26 +132,17 @@ if role == "Division Control Dashboard":
     col_date, col_stn = st.columns(2)
     
     with col_date:
-        today_str = datetime.date.today().strftime("%Y-%m-%d")
-        if not df_all.empty and "immersion_date" in df_all.columns:
-            raw_dates = df_all["immersion_date"].dropna().unique().tolist()
-            valid_dates = []
-            for d in raw_dates:
-                try:
-                    if isinstance(d, str) and "-" in d:
-                        parsed_d = datetime.datetime.strptime(d, "%Y-%m-%d").date()
-                    else:
-                        parsed_d = datetime.datetime.strptime(d, "%d/%m/%Y").date()
-                        
-                    if parsed_d >= datetime.date.today():
-                        valid_dates.append(str(parsed_d))
-                except ValueError:
-                    valid_dates.append(str(d))
-            date_options = ["All Dates"] + sorted(list(set(valid_dates)))
-        else:
-            date_options = ["All Dates"]
-            
-        selected_date = st.selectbox("Date of immersion:", date_options)
+    if not df_all.empty and "immersion_date" in df_all.columns:
+        # Extract unique, non-null dates submitted by station writers
+        entered_dates = df_all["immersion_date"].dropna().unique().tolist()
+        
+        # Sort dates chronologically
+        sorted_dates = sorted([str(d) for d in entered_dates if str(d).strip() != ""])
+        date_options = ["All Dates"] + sorted_dates
+    else:
+        date_options = ["All Dates"]
+        
+    selected_date = st.selectbox("ವಿಸರ್ಜನೆ ದಿನಾಂಕ (Date of Immersion):", date_options)
 
     with col_stn:
         default_stations = ["Haliyal", "Dandeli Town", "Dandeli Rural", "Ambikanagar", "Ramanagar", "Joida"]
