@@ -184,9 +184,7 @@ if role == "Division Control Dashboard":
             st.session_state["admin_logged_in"] = False
             st.rerun()
 
-        # ==========================================
         # DIVISION CONTROL: SET STATION TARGETS (VISIBLE ONLY FOR ADMIN)
-        # ==========================================
         st.markdown("---")
         st.subheader("🎯 ಠಾಣಾವಾರು ಗಣೇಶ ಮೂರ್ತಿಗಳ ನಿಗದಿತ ಸಂಖ್ಯೆ (Set Police Station Targets)")
         st.caption("ವಿಭಾಗೀಯ ಕಚೇರಿಯಿಂದ ಪ್ರತಿಯೊಂದು ಪೋಲಿಸ್ ಠಾಣೆಗೆ ಒಟ್ಟು ಗಣೇಶ ಮೂರ್ತಿಗಳ ಸಂಖ್ಯೆಯನ್ನು ಇಲ್ಲಿ ನಮೂದಿಸಿ.")
@@ -196,7 +194,6 @@ if role == "Division Control Dashboard":
         with col_target_stn:
             target_stn_choice = st.selectbox("ಪೋಲಿಸ್ ಠಾಣೆ ಆಯ್ಕೆಮಾಡಿ:", sorted(all_stns), key="div_target_stn")
             
-        # Retrieve current saved target for chosen station
         try:
             res_t = supabase.table("station_targets").select("target_count").eq("station_name", target_stn_choice).execute()
             current_t_val = res_t.data[0]["target_count"] if res_t.data else 10
@@ -250,7 +247,6 @@ elif role == "ಠಾಣಾ ಬರಹಗಾರರು (Station Writer)":
     except Exception:
         station_options = default_stations
 
-    # Step 1: Initial Station Selection Screen
     if "selected_station_writer" not in st.session_state:
         st.session_state["selected_station_writer"] = None
 
@@ -287,13 +283,14 @@ elif role == "ಠಾಣಾ ಬರಹಗಾರರು (Station Writer)":
         except Exception:
             target_val = 0
 
-        # Retrieve Entered Records Count
+        # Retrieve Station-Specific Idol Records
         try:
-            res_entered = supabase.table("ganesh_idols").select("id", count="exact").eq("station_name", selected_stn).execute()
-            entered_val = res_entered.count if res_entered.count is not None else 0
+            res_stn_records = supabase.table("ganesh_idols").select("*").eq("station_name", selected_stn).execute()
+            stn_records = res_stn_records.data if res_stn_records.data else []
         except Exception:
-            entered_val = 0
+            stn_records = []
 
+        entered_val = len(stn_records)
         remaining_val = max(0, target_val - entered_val) if target_val > 0 else 0
 
         # Read-Only Progress Display
@@ -304,6 +301,12 @@ elif role == "ಠಾಣಾ ಬರಹಗಾರರು (Station Writer)":
 
         if target_val == 0:
             st.info("ℹ️ ಸೂಚನೆ: ನಿಮ್ಮ ಠಾಣೆಗೆ ನಿಗದಿತ ಒಟ್ಟು ಗಣೇಶ ಮೂರ್ತಿಗಳ ಸಂಖ್ಯೆಯನ್ನು ವಿಭಾಗೀಯ ಕಚೇರಿಯಿಂದ (Division Control) ಇನ್ನು ನಮೂದಿಸಬೇಕಾಗಿದೆ.")
+
+        # Display persistent submission success notification if available
+        if st.session_state.get("show_writer_success_msg"):
+            st.success(st.session_state["show_writer_success_msg"], icon="✅")
+            # Clear message state so it doesn't persist forever across manual navigation
+            del st.session_state["show_writer_success_msg"]
 
         st.markdown("---")
 
@@ -380,10 +383,24 @@ elif role == "ಠಾಣಾ ಬರಹಗಾರರು (Station Writer)":
                         updated_entered = entered_val + 1
                         updated_remaining = max(0, target_val - updated_entered) if target_val > 0 else 0
                         
-                        st.success(f"ನಿಮ್ಮ ವಿವರಗಳನ್ನು ಸಲ್ಲಿಸಲಾಗಿದೆ. ಮಾಹಿತಿ ಸಲ್ಲಿಸಲು ಬಾಕಿ ಇರುವ ಗಣೇಶ ಮೂರ್ತಿಗಳ ವಿವರ: {updated_remaining}")
+                        # Store confirmation alert message in session state before rerun
+                        st.session_state["show_writer_success_msg"] = f"ವರದಿಯನ್ನು ಯಶಸ್ವಿಯಾಗಿ ಸಲ್ಲಿಸಲಾಗಿದೆ! (Report Submitted Successfully!) - unique ID: {sp_unique_id}. ಮಾಹಿತಿ ಸಲ್ಲಿಸಲು ಬಾಕಿ ಇರುವ ಗಣೇಶ ಮೂರ್ತಿಗಳ ವಿವರ: {updated_remaining}"
                         st.rerun()
                     except Exception as db_err:
                         st.error(f"ಡೇಟಾಬೇಸ್‌ನಲ್ಲಿ ದಾಖಲಿಸಲು ಸಾಧ್ಯವಾಗಿಲ್ಲ: {db_err}")
+
+        # Display Station Submitted Details Table (Fetched directly from Supabase)
+        st.markdown("---")
+        st.subheader(f"📋 {selected_stn} ಠಾಣೆಯಲ್ಲಿ ನಮೂದಿಸಲಾದ ಎಲ್ಲಾ ವಿವರಗಳು (Submitted Station Records)")
+        
+        df_stn = pd.DataFrame(stn_records) if stn_records else pd.DataFrame()
+        if not df_stn.empty:
+            if "id" in df_stn.columns:
+                cols_stn = ["id"] + [c for c in df_stn.columns if c != "id"]
+                df_stn = df_stn[cols_stn]
+            st.dataframe(df_stn, use_container_width=True)
+        else:
+            st.info("ಈ ಠಾಣೆಗೆ ಯಾವುದೇ ವಿವರಗಳನ್ನು ಇನ್ನು ನಮೂದಿಸಲಾಗಿಲ್ಲ.")
 
 # ==========================================
 # 3. BEAT STAFF FIELD UPDATE INTERFACE
