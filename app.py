@@ -310,7 +310,7 @@ if role == "Division Control Dashboard":
             st.info("No records available to delete.")
 
 # ==========================================
-# 2. STATION WRITER INTERFACE (UPDATED WITH FORM CLEARING)
+# 2. STATION WRITER INTERFACE (FIXED FORM CLEARING)
 # ==========================================
 elif role == "ಠಾಣಾ ಬರಹಗಾರರು (Station Writer)":
     st.markdown(
@@ -361,8 +361,8 @@ elif role == "ಠಾಣಾ ಬರಹಗಾರರು (Station Writer)":
     else:
         selected_stn = st.session_state["selected_station_writer"]
 
-        # Function to clear input fields after successful submission
-        def clear_writer_form():
+        # Handle form field clearing before rendering the widgets
+        if st.session_state.get("clear_writer_form_flag", False):
             st.session_state["writer_sp_id"] = ""
             st.session_state["writer_pandal"] = ""
             st.session_state["writer_address"] = ""
@@ -374,6 +374,7 @@ elif role == "ಠಾಣಾ ಬರಹಗಾರರು (Station Writer)":
             st.session_state["writer_vice_phone"] = ""
             st.session_state["writer_route"] = ""
             st.session_state["writer_incident"] = ""
+            st.session_state["clear_writer_form_flag"] = False
 
         col_stn_title, col_stn_change = st.columns([3, 1])
         with col_stn_title:
@@ -410,7 +411,9 @@ elif role == "ಠಾಣಾ ಬರಹಗಾರರು (Station Writer)":
             stn_records = []
 
         entered_val = len(stn_records)
-        remaining_val = max(0, target_val - entered_val) if target_val > 0 else 0
+        remaining_val = (
+            max(0, target_val - entered_val) if target_val > 0 else 0
+        )
 
         # Read-Only Progress Display
         col_t1, col_t2, col_t3 = st.columns(3)
@@ -432,7 +435,7 @@ elif role == "ಠಾಣಾ ಬರಹಗಾರರು (Station Writer)":
 
         st.markdown("---")
 
-        # Form with Session State Keys for Auto-Clearing
+        # Form with Session State Keys
         with st.form("station_writer_form"):
             sp_unique_id = st.text_input(
                 "ಜಿಲ್ಲಾ ಕಚೇರಿಯಿಂದ ನೀಡಲಾದ ಸಂಖ್ಯೆ (SP Office Unique ID) :",
@@ -534,7 +537,9 @@ elif role == "ಠಾಣಾ ಬರಹಗಾರರು (Station Writer)":
                         "station_name": str(selected_stn),
                         "pandal_name": str(pandal_name).strip(),
                         "location_address": (
-                            str(location_address).strip() if location_address else ""
+                            str(location_address).strip()
+                            if location_address
+                            else ""
                         ),
                         "beat_number": int(beat_number),
                         "beat_staff_details": (
@@ -544,10 +549,14 @@ elif role == "ಠಾಣಾ ಬರಹಗಾರರು (Station Writer)":
                         ),
                         "installation_date": install_date.strftime("%Y-%m-%d"),
                         "president_name": (
-                            str(president_name).strip() if president_name else ""
+                            str(president_name).strip()
+                            if president_name
+                            else ""
                         ),
                         "president_phone": (
-                            str(president_phone).strip() if president_phone else ""
+                            str(president_phone).strip()
+                            if president_phone
+                            else ""
                         ),
                         "vice_president_name": (
                             str(vice_president_name).strip()
@@ -587,12 +596,14 @@ elif role == "ಠಾಣಾ ಬರಹಗಾರರು (Station Writer)":
                             f"ದಾಖಲಿಸಲು ಬಾಕಿ ಇರುವ ಗಣೇಶ ಮೂರ್ತಿಗಳು: {updated_remaining}"
                         )
 
-                        # Erase input field contents for new entry
-                        clear_writer_form()
+                        # Set flag to clear inputs at top of next run
+                        st.session_state["clear_writer_form_flag"] = True
                         st.rerun()
 
                     except Exception as db_err:
-                        st.error(f"ಡೇಟಾಬೇಸ್‌ನಲ್ಲಿ ದಾಖಲಿಸಲು ಸಾಧ್ಯವಾಗಿಲ್ಲ: {db_err}")
+                        st.error(
+                            f"ಡೇಟಾಬೇಸ್‌ನಲ್ಲಿ ದಾಖಲಿಸಲು ಸಾಧ್ಯವಾಗಿಲ್ಲ: {db_err}"
+                        )
 
         st.markdown("---")
         st.subheader(
