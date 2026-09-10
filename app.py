@@ -3,19 +3,6 @@ from supabase import create_client, Client
 import datetime
 import pandas as pd
 from io import BytesIO
-import urllib.request
-
-# Safe import for ReportLab & Kannada Font Registration
-try:
-    from reportlab.lib.pagesizes import letter
-    from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle
-    from reportlab.lib.styles import getSampleStyleSheet
-    from reportlab.lib import colors
-    from reportlab.pdfbase import pdfmetrics
-    from reportlab.pdfbase.ttfonts import TTFont
-    REPORTLAB_AVAILABLE = True
-except ImportError:
-    REPORTLAB_AVAILABLE = False
 
 st.set_page_config(
     page_title="Ganesh Bandobast Digital Monitoring System",
@@ -35,66 +22,6 @@ except Exception as e:
     st.error(f"ಸಂಪರ್ಕ ದೋಷ (Connection Error): {e}")
     st.stop()
 
-# Helper function to load Kannada font for PDF export
-@st.cache_resource
-def load_kannada_font():
-    font_url = "https://github.com/google/fonts/raw/main/ofl/notosanskannada/NotoSansKannada-Regular.ttf"
-    font_path = "NotoSansKannada-Regular.ttf"
-    try:
-        urllib.request.urlretrieve(font_url, font_path)
-        pdfmetrics.registerFont(TTFont('KannadaFont', font_path))
-        return 'KannadaFont'
-    except Exception:
-        return 'Helvetica'
-
-# Helper function to generate PDF Report
-def generate_pdf(dataframe):
-    if not REPORTLAB_AVAILABLE:
-        return None
-    
-    font_name = load_kannada_font()
-    buffer = BytesIO()
-    doc = SimpleDocTemplate(buffer, pagesize=letter)
-    elements = []
-    
-    styles = getSampleStyleSheet()
-    
-    # Custom style using the registered Kannada font
-    kannada_style = styles['Normal'].clone('KannadaStyle')
-    kannada_style.fontName = font_name
-    kannada_style.fontSize = 9
-    kannada_style.leading = 12
-
-    title_style = styles['Title'].clone('KannadaTitleStyle')
-    title_style.fontName = font_name
-
-    title = Paragraph("<b>Ganesh Bandobast Digital Monitoring System</b>", title_style)
-    subtitle = Paragraph("<b>Division Control Report</b>", styles['Heading2'])
-    elements.extend([title, subtitle, Spacer(1, 12)])
-    
-    if not dataframe.empty:
-        headers = [Paragraph(f"<b>{col}</b>", kannada_style) for col in dataframe.columns]
-        table_data = [headers]
-        
-        for _, row in dataframe.iterrows():
-            formatted_row = [Paragraph(str(val) if val is not None else "", kannada_style) for val in row]
-            table_data.append(formatted_row)
-        
-        table = Table(table_data)
-        table.setStyle(TableStyle([
-            ('BACKGROUND', (0,0), (-1,0), colors.grey),
-            ('TEXTCOLOR', (0,0), (-1,0), colors.whitesmoke),
-            ('ALIGN', (0,0), (-1,-1), 'CENTER'),
-            ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
-            ('BOTTOMPADDING', (0,0), (-1,0), 8),
-            ('GRID', (0,0), (-1,-1), 0.5, colors.black),
-        ]))
-        elements.append(table)
-    
-    doc.build(elements)
-    buffer.seek(0)
-    return buffer
-
 # Main Title Clean
 st.markdown(
     "<h1 style='text-align: center;'>Ganesh Bandobast Digital Monitoring System</h1>", 
@@ -106,7 +33,7 @@ role = st.sidebar.selectbox(
     ["Division Control Dashboard", "ಠಾಣಾ ಬರಹಗಾರರು (Station Writer)", "ಬೀಟ್ ಸಿಬ್ಬಂದಿ (Beat Staff)"]
 )
 
-# Admin Password Retrieval
+# Admin Password Retrieval (Default: 'admin')
 ADMIN_PASSWORD = st.secrets.get("ADMIN_PASSWORD", "admin")
 
 # ==========================================
@@ -124,7 +51,7 @@ if role == "Division Control Dashboard":
 
     df_all = pd.DataFrame(all_idols) if all_idols else pd.DataFrame()
 
-    # Reorder columns so 'id' (SP Office Number) is the first column
+    # Reorder columns so 'id' (SP Office Unique ID) is displayed first
     if not df_all.empty and "id" in df_all.columns:
         cols = ["id"] + [c for c in df_all.columns if c != "id"]
         df_all = df_all[cols]
@@ -132,17 +59,15 @@ if role == "Division Control Dashboard":
     col_date, col_stn = st.columns(2)
     
     with col_date:
-    if not df_all.empty and "immersion_date" in df_all.columns:
-        # Extract unique, non-null dates submitted by station writers
-        entered_dates = df_all["immersion_date"].dropna().unique().tolist()
-        
-        # Sort dates chronologically
-        sorted_dates = sorted([str(d) for d in entered_dates if str(d).strip() != ""])
-        date_options = ["All Dates"] + sorted_dates
-    else:
-        date_options = ["All Dates"]
-        
-    selected_date = st.selectbox("ವಿಸರ್ಜನೆ ದಿನಾಂಕ (Date of Immersion):", date_options)
+        if not df_all.empty and "immersion_date" in df_all.columns:
+            # Extract ONLY immersion dates actually entered by station writers
+            raw_dates = df_all["immersion_date"].dropna().unique().tolist()
+            entered_dates = sorted([str(d).strip() for d in raw_dates if str(d).strip() != ""])
+            date_options = ["All Dates"] + entered_dates
+        else:
+            date_options = ["All Dates"]
+            
+        selected_date = st.selectbox("ವಿಸರ್ಜನೆ ದಿನಾಂಕ (Date of Immersion):", date_options)
 
     with col_stn:
         default_stations = ["Haliyal", "Dandeli Town", "Dandeli Rural", "Ambikanagar", "Ramanagar", "Joida"]
@@ -172,6 +97,7 @@ if role == "Division Control Dashboard":
     current_installed_count = len(filtered_df) if not filtered_df.empty else 0
     m1.metric("ಪ್ರಸ್ತುತ ಪ್ರತಿಷ್ಠಾಪನೆಯಾಗಿರುವ ಗಣೇಶ ಮೂರ್ತಿಗಳು", current_installed_count)
     
+    today_str = datetime.date.today().strftime("%Y-%m-%d")
     if not df_all.empty and "immersion_date" in df_all.columns:
         today_immersions = df_all[df_all["immersion_date"] == today_str]
         m2.metric("ಇಂದು ವಿಸರ್ಜನೆಯಾಗಲಿರುವ ಗಣೇಶ ಮೂರ್ತಿಗಳು", len(today_immersions))
@@ -180,26 +106,21 @@ if role == "Division Control Dashboard":
 
     st.markdown("<br>", unsafe_allow_html=True)
 
-    # Add pandas/io import at the top:
-# from io import BytesIO
-
-st.subheader("📊 ಡೌನ್‌ಲೋಡ್ ವರದಿ (Download Excel Report)")
-
-if not filtered_df.empty:
-    buffer = BytesIO()
-    with pd.ExcelWriter(buffer, engine='openpyxl') as writer:
-        filtered_df.to_excel(writer, index=False, sheet_name='Ganesh_Bandobast')
-    
-    st.download_button(
-        label="📥 Excel ವರದಿ ಡೌನ್‌ಲೋಡ್ ಮಾಡಿ (Download Excel)",
-        data=buffer.getvalue(),
-        file_name=f"Ganesh_Bandobast_Report_{datetime.date.today()}.xlsx",
-        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-    )
-        else:
-            st.info("ವರದಿ ರಚಿಸಲು ಯಾವುದೇ ಡೇಟಾ ಲಭ್ಯವಿಲ್ಲ.")
+    # Excel Download Block (Fully Preserves Unicode Kannada Text)
+    st.subheader("📊 Excel ವರದಿ ಡೌನ್‌ಲೋಡ್ (Download Excel Report)")
+    if not filtered_df.empty:
+        buffer = BytesIO()
+        with pd.ExcelWriter(buffer, engine='openpyxl') as writer:
+            filtered_df.to_excel(writer, index=False, sheet_name='Ganesh_Bandobast')
+        
+        st.download_button(
+            label="📥 Excel ವರದಿ ಡೌನ್‌ಲೋಡ್ ಮಾಡಿ (Download Excel)",
+            data=buffer.getvalue(),
+            file_name=f"Ganesh_Bandobast_Report_{datetime.date.today()}.xlsx",
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        )
     else:
-        st.warning("`reportlab` ಲೈಬ್ರರಿ ಲಭ್ಯವಿಲ್ಲ.")
+        st.info("ವರದಿ ರಚಿಸಲು ಯಾವುದೇ ಡೇಟಾ ಲಭ್ಯವಿಲ್ಲ.")
 
     st.markdown("---")
 
@@ -227,7 +148,7 @@ if not filtered_df.empty:
                     st.success("Admin Login Successful!")
                     st.rerun()
                 else:
-                    st.error("Incorrect Password.")
+                    st.error("Incorrect Password. (Default is 'admin')")
     else:
         st.success("🔓 Admin Mode Active")
         if st.button("Logout Admin"):
