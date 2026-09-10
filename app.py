@@ -22,7 +22,7 @@ except Exception as e:
     st.error(f"ಸಂಪರ್ಕ ದೋಷ (Connection Error): {e}")
     st.stop()
 
-# Main Title Clean
+# Main Title
 st.markdown(
     "<h1 style='text-align: center;'>Ganesh Bandobast Digital Monitoring System</h1>", 
     unsafe_allow_html=True
@@ -33,7 +33,6 @@ role = st.sidebar.selectbox(
     ["Division Control Dashboard", "ಠಾಣಾ ಬರಹಗಾರರು (Station Writer)", "ಬೀಟ್ ಸಿಬ್ಬಂದಿ (Beat Staff)"]
 )
 
-# Admin Password Retrieval (Default: 'admin')
 ADMIN_PASSWORD = st.secrets.get("ADMIN_PASSWORD", "admin")
 
 # ==========================================
@@ -51,7 +50,6 @@ if role == "Division Control Dashboard":
 
     df_all = pd.DataFrame(all_idols) if all_idols else pd.DataFrame()
 
-    # Reorder columns so 'id' (SP Office Unique ID) is displayed first
     if not df_all.empty and "id" in df_all.columns:
         cols = ["id"] + [c for c in df_all.columns if c != "id"]
         df_all = df_all[cols]
@@ -60,14 +58,25 @@ if role == "Division Control Dashboard":
     
     with col_date:
         if not df_all.empty and "immersion_date" in df_all.columns:
-            # Extract ONLY immersion dates actually entered by station writers
+            # Extract distinct raw YYYY-MM-DD dates
             entered_dates = df_all["immersion_date"].dropna().unique().tolist()
-            sorted_dates = sorted([str(d).strip() for d in entered_dates if str(d).strip() != ""])
-            date_options = ["All Dates"] + sorted_dates
+            raw_dates = sorted([str(d).strip() for d in entered_dates if str(d).strip() != ""])
+            
+            # Map raw YYYY-MM-DD to DD/MM/YYYY display strings
+            date_map = {}
+            for rd in raw_dates:
+                try:
+                    dt_obj = datetime.datetime.strptime(rd, "%Y-%m-%d")
+                    date_map[dt_obj.strftime("%d/%m/%Y")] = rd
+                except ValueError:
+                    date_map[rd] = rd
+                    
+            date_options = ["All Dates"] + list(date_map.keys())
         else:
+            date_map = {}
             date_options = ["All Dates"]
             
-        selected_date = st.selectbox("ವಿಸರ್ಜನೆ ದಿನಾಂಕ (Date of Immersion):", date_options)
+        selected_date_display = st.selectbox("ವಿಸರ್ಜನೆ ದಿನಾಂಕ (Date of Immersion):", date_options)
 
     with col_stn:
         default_stations = ["Haliyal", "Dandeli Town", "Dandeli Rural", "Ambikanagar", "Ramanagar", "Joida"]
@@ -84,8 +93,9 @@ if role == "Division Control Dashboard":
     filtered_df = df_all.copy() if not df_all.empty else pd.DataFrame()
 
     if not filtered_df.empty:
-        if selected_date != "All Dates":
-            filtered_df = filtered_df[filtered_df["immersion_date"] == selected_date]
+        if selected_date_display != "All Dates":
+            raw_selected_date = date_map[selected_date_display]
+            filtered_df = filtered_df[filtered_df["immersion_date"] == raw_selected_date]
         if selected_station != "ಎಲ್ಲಾ ಠಾಣೆಗಳು (All)":
             filtered_df = filtered_df[filtered_df["station_name"] == selected_station]
         if selected_category != "ಎಲ್ಲಾ (All)":
@@ -93,20 +103,42 @@ if role == "Division Control Dashboard":
 
     st.markdown("---")
 
+    # Main Metrics Calculation
     m1, m2 = st.columns(2)
     current_installed_count = len(filtered_df) if not filtered_df.empty else 0
     m1.metric("ಪ್ರಸ್ತುತ ಪ್ರತಿಷ್ಠಾಪನೆಯಾಗಿರುವ ಗಣೇಶ ಮೂರ್ತಿಗಳು", current_installed_count)
     
-    today_str = datetime.date.today().strftime("%Y-%m-%d")
-    if not df_all.empty and "immersion_date" in df_all.columns:
-        today_immersions = df_all[df_all["immersion_date"] == today_str]
-        m2.metric("ಇಂದು ವಿಸರ್ಜನೆಯಾಗಲಿರುವ ಗಣೇಶ ಮೂರ್ತಿಗಳು", len(today_immersions))
+    if selected_date_display != "All Dates":
+        metric_label = f"ದಿನಾಂಕ {selected_date_display} ರಂದು ವಿಸರ್ಜನೆಯಾಗಲಿರುವ ಗಣೇಶ ಮೂರ್ತಿಗಳ ಸಂಖ್ಯೆ"
+        m2.metric(metric_label, current_installed_count)
     else:
-        m2.metric("ಇಂದು ವಿಸರ್ಜನೆಯಾಗಲಿರುವ ಗಣೇಶ ಮೂರ್ತಿಗಳು", 0)
+        metric_label = "ವಿಸರ್ಜನೆಗೆ ಬಾಕಿ ಇರುವ ಗಣೇಶ ಮೂರ್ತಿಗಳ ಸಂಖ್ಯೆ"
+        if not filtered_df.empty and "immersion_status" in filtered_df.columns:
+            pending_count = len(filtered_df[filtered_df["immersion_status"] != "ಶಾಂತಿಯುತವಾಗಿ ಪೂರ್ಣಗೊಂಡಿದೆ"])
+        else:
+            pending_count = current_installed_count
+        m2.metric(metric_label, pending_count)
 
     st.markdown("<br>", unsafe_allow_html=True)
 
-    # Excel Download Block (Fully Preserves Kannada Unicode Text)
+    # Category Breakdown Metrics
+    st.subheader("📊 ವರ್ಗೀಕರಣದ ವಿವರ (Category Breakdown)")
+    c1, c2, c3 = st.columns(3)
+    
+    if not filtered_df.empty and "sensitivity_level" in filtered_df.columns:
+        v_hyper = len(filtered_df[filtered_df["sensitivity_level"] == "ಅತೀಸೂಕ್ಷ್ಮ"])
+        v_sens = len(filtered_df[filtered_df["sensitivity_level"] == "ಸೂಕ್ಷ್ಮ"])
+        v_norm = len(filtered_df[filtered_df["sensitivity_level"] == "ಸಾಮಾನ್ಯ"])
+    else:
+        v_hyper, v_sens, v_norm = 0, 0, 0
+
+    c1.metric("🔴 ಅತೀಸೂಕ್ಷ್ಮ (Hyper-sensitive)", v_hyper)
+    c2.metric("🟡 ಸೂಕ್ಷ್ಮ (Sensitive)", v_sens)
+    c3.metric("🟢 ಸಾಮಾನ್ಯ (Normal)", v_norm)
+
+    st.markdown("---")
+
+    # Excel Download
     st.subheader("📊 ಡೌನ್‌ಲೋಡ್ ವರದಿ (Download Excel Report)")
     if not filtered_df.empty:
         buffer = BytesIO()
@@ -130,9 +162,7 @@ if role == "Division Control Dashboard":
     else:
         st.write("ಯಾವುದೇ ವಿವರಗಳು ಲಭ್ಯವಿಲ್ಲ.")
 
-    # ==========================================
-    # ADMIN LOGIN & DELETE SECTION
-    # ==========================================
+    # Admin Login & Delete Section
     st.markdown("---")
     st.subheader("🔑 Admin Controls & Record Management")
     
@@ -148,7 +178,7 @@ if role == "Division Control Dashboard":
                     st.success("Admin Login Successful!")
                     st.rerun()
                 else:
-                    st.error("Incorrect Password. (Default is 'admin')")
+                    st.error("Incorrect Password.")
     else:
         st.success("🔓 Admin Mode Active")
         if st.button("Logout Admin"):
@@ -188,122 +218,149 @@ elif role == "ಠಾಣಾ ಬರಹಗಾರರು (Station Writer)":
     except Exception:
         station_options = default_stations
 
-    selected_stn = st.selectbox("ಪೋಲಿಸ್ ಠಾಣೆ :", station_options)
+    # Step 1: Initial Station Selection Screen
+    if "selected_station_writer" not in st.session_state:
+        st.session_state["selected_station_writer"] = None
 
-    # Calculate Total Target vs Entered Records Count
-    try:
-        res_target = supabase.table("station_targets").select("target_count").eq("station_name", selected_stn).execute()
-        target_val = res_target.data[0]["target_count"] if res_target.data else 0
-    except Exception:
-        target_val = 0
-
-    try:
-        res_entered = supabase.table("ganesh_idols").select("id", count="exact").eq("station_name", selected_stn).execute()
-        entered_val = res_entered.count if res_entered.count is not None else 0
-    except Exception:
-        entered_val = 0
-
-    col_target_input, col_target_status = st.columns([2, 2])
-
-    with col_target_input:
-        if target_val == 0:
-            new_target = st.number_input(
-                "ಪೋಲಿಸ್ ಠಾಣಾ ವ್ಯಾಪ್ತಿಯಲ್ಲಿ ಪ್ರತಿಷ್ಠಾಪನೆಯಾಗಲಿರುವ ಒಟ್ಟು ಗಣೇಶ ಮೂರ್ತಿಗಳ ಸಂಖ್ಯೆ :", 
-                min_value=1, max_value=500, value=10
-            )
-            if st.button("ಸಂಖ್ಯೆಯನ್ನು ಉಳಿಸಿ (Save Total Target)"):
-                supabase.table("station_targets").upsert({"station_name": selected_stn, "target_count": new_target}).execute()
-                st.success("ಒಟ್ಟು ಸಂಖ್ಯೆಯನ್ನು ಯಶಸ್ವಿಯಾಗಿ ಉಳಿಸಲಾಗಿದೆ!")
+    if not st.session_state["selected_station_writer"]:
+        st.markdown("---")
+        st.subheader("🏢 ಪೋಲಿಸ್ ಠಾಣೆಯನ್ನು ಆಯ್ಕೆಮಾಡಿ (Select Police Station)")
+        
+        selected_stn = st.selectbox(
+            "ದಯವಿಟ್ಟು ನಿಮ್ಮ ಠಾಣೆಯನ್ನು ಆಯ್ಕೆಮಾಡಿ:", 
+            ["-- ಠಾಣೆ ಆಯ್ಕೆಮಾಡಿ --"] + station_options
+        )
+        
+        if st.button("ಠಾಣೆ ಪ್ರವೇಶಿಸಿ (Proceed to Station Entry)", type="primary"):
+            if selected_stn != "-- ಠಾಣೆ ಆಯ್ಕೆಮಾಡಿ --":
+                st.session_state["selected_station_writer"] = selected_stn
                 st.rerun()
-        else:
-            st.info(f"**ಒಟ್ಟು ನಿಗದಿತ ಗಣೇಶ ಮೂರ್ತಿಗಳ ಸಂಖ್ಯೆ:** {target_val}")
-
-    with col_target_status:
-        remaining_val = max(0, target_val - entered_val) if target_val > 0 else 0
-        st.metric("ದಾಖಲಿಸಲಾದ ವಿವರಗಳು", f"{entered_val} / {target_val if target_val > 0 else 'ನಿಗದಿಯಾಗಿಲ್ಲ'}")
-        if target_val > 0:
-            st.warning(f"**ಇನ್ನೂ ಭರ್ತಿ ಮಾಡಲು ಬಾಕಿ ಇರುವ ಸಂಖ್ಯೆ:** {remaining_val}")
-
-    st.markdown("---")
-
-    # Form accepting SP Office Unique ID & Unicode Kannada text
-    with st.form("station_writer_form"):
-        sp_unique_id = st.text_input("ಜಿಲ್ಲಾ ಕಚೇರಿಯಿಂದ ನೀಡಲಾದ ಸಂಖ್ಯೆ (SP Office Unique ID) :", placeholder="ಉದಾ: SP/GNS/2026/01")
-        pandal_name = st.text_input("ಗಣೇಶೋತ್ಸವ ಸಮಿತಿಯ ಹೆಸರು :", placeholder="ಉದಾ: ಶ್ರೀ ವಿನಾಯಕ ಯುವಕ ಮಂಡಳಿ")
-        location_address = st.text_input("ಪ್ರತಿಷ್ಠಾಪನೆಯಾಗುವ ಸ್ಥಳ :", placeholder="ಉದಾ: ಬಸ್ ನಿಲ್ದಾಣದ ಹತ್ತಿರ")
-
-        col_beat, col_staff = st.columns(2)
-        beat_number = col_beat.number_input("ಬೀಟ್ ನಂಬರ :", min_value=1, max_value=100, value=1)
-        beat_staff_details = col_staff.text_input("ಬೀಟ್ ಸಿಬ್ಬಂದಿ ವಿವರ (ಹೆಸರು, ಮೊಬೈಲ್ ನಂ) :", placeholder="ಉದಾ: ಹೆಚ್‌ಸಿ 452 ರಮೇಶ್, 9876543210")
-
-        install_date = st.date_input(
-            "ಗಣೇಶ ಪ್ರತಿಷ್ಠಾಪನ ದಿನಾಂಕ :", 
-            datetime.date.today(), 
-            format="DD/MM/YYYY"
-        )
-
-        col_p1, col_p2 = st.columns(2)
-        president_name = col_p1.text_input("ಕಮಿಟಿ ಅಧ್ಯಕ್ಷರ ಹೆಸರು :", placeholder="ಅಧ್ಯಕ್ಷರ ಹೆಸರು")
-        president_phone = col_p2.text_input("ಮೊಬೈಲ್ ನಂ (ಅಧ್ಯಕ್ಷರು) :", placeholder="9876543210")
-
-        col_v1, col_v2 = st.columns(2)
-        vice_president_name = col_v1.text_input("ಕಮಿಟಿ ಉಪಾಧ್ಯಕ್ಷರ ಹೆಸರು :", placeholder="ಉಪಾಧ್ಯಕ್ಷರ ಹೆಸರು")
-        vice_president_phone = col_v2.text_input("ಮೊಬೈಲ್ ನಂ (ಉಪಾಧ್ಯಕ್ಷರು) :", placeholder="9876543210")
-
-        sensitivity_level = st.selectbox("ವರ್ಗ :", ["ಸಾಮಾನ್ಯ", "ಸೂಕ್ಷ್ಮ", "ಅತೀಸೂಕ್ಷ್ಮ"])
-
-        immersion_date = st.date_input(
-            "ವಿಸರ್ಜನೆಯಾಗುವ ದಿನಾಂಕ :", 
-            datetime.date.today(), 
-            format="DD/MM/YYYY"
-        )
-
-        sensitive_route_details = st.text_area(
-            "ಮಾರ್ಗಮಧ್ಯದಲ್ಲಿರುವ ಮಸೀದಿ ಹಾಗೂ ಚರ್ಚಗಳ ವಿವರ :", 
-            placeholder="ವಿವರಗಳನ್ನು ಇಲ್ಲಿ ಟೈಪ್ ಮಾಡಿ..."
-        )
-
-        past_incident_details = st.text_area(
-            "ಈ ಹಿಂದೆ ನಡೆದ ಘಟನೆ/ಪ್ರಕರಣಗಳ ವಿವರ :", 
-            placeholder="ವಿವರಗಳನ್ನು ಇಲ್ಲಿ ಟೈಪ್ ಮಾಡಿ..."
-        )
-
-        submit_btn = st.form_submit_button("ಮಾಹಿತಿ ಸಲ್ಲಿಸಿ (Submit Record)")
-
-        if submit_btn:
-            if not sp_unique_id.strip():
-                st.warning("ದಯವಿಟ್ಟು 'ಜಿಲ್ಲಾ ಕಚೇರಿಯಿಂದ ನೀಡಲಾದ ಸಂಖ್ಯೆ'ಯನ್ನು ನಮೂದಿಸಿ.")
-            elif not pandal_name.strip():
-                st.warning("ದಯವಿಟ್ಟು ಗಣೇಶೋತ್ಸವ ಸಮಿತಿಯ ಹೆಸರನ್ನು ನಮೂದಿಸಿ.")
             else:
-                record = {
-                    "id": str(sp_unique_id).strip(),
-                    "station_name": str(selected_stn),
-                    "pandal_name": str(pandal_name).strip(),
-                    "location_address": str(location_address).strip() if location_address else "",
-                    "beat_number": int(beat_number),
-                    "beat_staff_details": str(beat_staff_details).strip() if beat_staff_details else "",
-                    "installation_date": install_date.strftime("%Y-%m-%d"),
-                    "president_name": str(president_name).strip() if president_name else "",
-                    "president_phone": str(president_phone).strip() if president_phone else "",
-                    "vice_president_name": str(vice_president_name).strip() if vice_president_name else "",
-                    "vice_president_phone": str(vice_president_phone).strip() if vice_president_phone else "",
-                    "sensitivity_level": str(sensitivity_level),
-                    "immersion_date": immersion_date.strftime("%Y-%m-%d"),
-                    "sensitive_route_details": str(sensitive_route_details).strip() if sensitive_route_details else "",
-                    "past_incident_details": str(past_incident_details).strip() if past_incident_details else ""
-                }
-                try:
-                    supabase.table("ganesh_idols").insert(record).execute()
-                    
-                    # Calculate updated remaining count
-                    updated_entered = entered_val + 1
-                    updated_remaining = max(0, target_val - updated_entered) if target_val > 0 else 0
-                    
-                    st.success(f"ನಿಮ್ಮ ವಿವರಗಳನ್ನು ಸಲ್ಲಿಸಲಾಗಿದೆ. ಮಾಹಿತಿ ಸಲ್ಲಿಸಲು ಬಾಕಿ ಇರುವ ಗಣೇಶ ಮೂರ್ತಿಗಳ ವಿವರ: {updated_remaining}")
+                st.warning("ದಯವಿಟ್ಟು ಪಟ್ಟಿಯಿಂದ ನಿಮ್ಮ ಠಾಣೆಯನ್ನು ಆಯ್ಕೆಮಾಡಿ.")
+    else:
+        selected_stn = st.session_state["selected_station_writer"]
+        
+        col_stn_title, col_stn_change = st.columns([3, 1])
+        with col_stn_title:
+            st.success(f"📌 ಪ್ರಸ್ತುತ ಆಯ್ಕೆ ಮಾಡಲಾದ ಠಾಣೆ: **{selected_stn}**")
+        with col_stn_change:
+            if st.button("🔄 ಠಾಣೆಯನ್ನು ಬದಲಾಯಿಸಿ"):
+                st.session_state["selected_station_writer"] = None
+                st.rerun()
+
+        # Calculate Total Target vs Entered Records Count
+        try:
+            res_target = supabase.table("station_targets").select("target_count").eq("station_name", selected_stn).execute()
+            target_val = res_target.data[0]["target_count"] if res_target.data else 0
+        except Exception:
+            target_val = 0
+
+        try:
+            res_entered = supabase.table("ganesh_idols").select("id", count="exact").eq("station_name", selected_stn).execute()
+            entered_val = res_entered.count if res_entered.count is not None else 0
+        except Exception:
+            entered_val = 0
+
+        col_target_input, col_target_status = st.columns([2, 2])
+
+        with col_target_input:
+            if target_val == 0:
+                new_target = st.number_input(
+                    "ಪೋಲಿಸ್ ಠಾಣಾ ವ್ಯಾಪ್ತಿಯಲ್ಲಿ ಪ್ರತಿಷ್ಠಾಪನೆಯಾಗಲಿರುವ ಒಟ್ಟು ಗಣೇಶ ಮೂರ್ತಿಗಳ ಸಂಖ್ಯೆ :", 
+                    min_value=1, max_value=500, value=10
+                )
+                if st.button("ಸಂಖ್ಯೆಯನ್ನು ಉಳಿಸಿ (Save Total Target)"):
+                    supabase.table("station_targets").upsert({"station_name": selected_stn, "target_count": new_target}).execute()
+                    st.success("ಒಟ್ಟು ಸಂಖ್ಯೆಯನ್ನು ಯಶಸ್ವಿಯಾಗಿ ಉಳಿಸಲಾಗಿದೆ!")
                     st.rerun()
-                except Exception as db_err:
-                    st.error(f"ಡೇಟಾಬೇಸ್‌ನಲ್ಲಿ ದಾಖಲಿಸಲು ಸಾಧ್ಯವಾಗಿಲ್ಲ: {db_err}")
+            else:
+                st.info(f"**ಒಟ್ಟು ನಿಗದಿತ ಗಣೇಶ ಮೂರ್ತಿಗಳ ಸಂಖ್ಯೆ:** {target_val}")
+
+        with col_target_status:
+            remaining_val = max(0, target_val - entered_val) if target_val > 0 else 0
+            st.metric("ದಾಖಲಿಸಲಾದ ವಿವರಗಳು", f"{entered_val} / {target_val if target_val > 0 else 'ನಿಗದಿಯಾಗಿಲ್ಲ'}")
+            if target_val > 0:
+                st.warning(f"**ಇನ್ನೂ ಭರ್ತಿ ಮಾಡಲು ಬಾಕಿ ಇರುವ ಸಂಖ್ಯೆ:** {remaining_val}")
+
+        st.markdown("---")
+
+        # Form accepting SP Office Unique ID & Unicode Kannada text
+        with st.form("station_writer_form"):
+            sp_unique_id = st.text_input("ಜಿಲ್ಲಾ ಕಚೇರಿಯಿಂದ ನೀಡಲಾದ ಸಂಖ್ಯೆ (SP Office Unique ID) :", placeholder="ಉದಾ: SP/GNS/2026/01")
+            pandal_name = st.text_input("ಗಣೇಶೋತ್ಸವ ಸಮಿತಿಯ ಹೆಸರು :", placeholder="ಉದಾ: ಶ್ರೀ ವಿನಾಯಕ ಯುವಕ ಮಂಡಳಿ")
+            location_address = st.text_input("ಪ್ರತಿಷ್ಠಾಪನೆಯಾಗುವ ಸ್ಥಳ :", placeholder="ಉದಾ: ಬಸ್ ನಿಲ್ದಾಣದ ಹತ್ತಿರ")
+
+            col_beat, col_staff = st.columns(2)
+            beat_number = col_beat.number_input("ಬೀಟ್ ನಂಬರ :", min_value=1, max_value=100, value=1)
+            beat_staff_details = col_staff.text_input("ಬೀಟ್ ಸಿಬ್ಬಂದಿ ವಿವರ (ಹೆಸರು, ಮೊಬೈಲ್ ನಂ) :", placeholder="ಉದಾ: ಹೆಚ್‌ಸಿ 452 ರಮೇಶ್, 9876543210")
+
+            install_date = st.date_input(
+                "ಗಣೇಶ ಪ್ರತಿಷ್ಠಾಪನ ದಿನಾಂಕ :", 
+                datetime.date.today(), 
+                format="DD/MM/YYYY"
+            )
+
+            col_p1, col_p2 = st.columns(2)
+            president_name = col_p1.text_input("ಕಮಿಟಿ ಅಧ್ಯಕ್ಷರ ಹೆಸರು :", placeholder="ಅಧ್ಯಕ್ಷರ ಹೆಸರು")
+            president_phone = col_p2.text_input("ಮೊಬೈಲ್ ನಂ (ಅಧ್ಯಕ್ಷರು) :", placeholder="9876543210")
+
+            col_v1, col_v2 = st.columns(2)
+            vice_president_name = col_v1.text_input("ಕಮಿಟಿ ಉಪಾಧ್ಯಕ್ಷರ ಹೆಸರು :", placeholder="ಉಪಾಧ್ಯಕ್ಷರ ಹೆಸರು")
+            vice_president_phone = col_v2.text_input("ಮೊಬೈಲ್ ನಂ (ಉಪಾಧ್ಯಕ್ಷರು) :", placeholder="9876543210")
+
+            sensitivity_level = st.selectbox("ವರ್ಗ :", ["ಸಾಮಾನ್ಯ", "ಸೂಕ್ಷ್ಮ", "ಅತೀಸೂಕ್ಷ್ಮ"])
+
+            immersion_date = st.date_input(
+                "ವಿಸರ್ಜನೆಯಾಗುವ ದಿನಾಂಕ :", 
+                datetime.date.today(), 
+                format="DD/MM/YYYY"
+            )
+
+            sensitive_route_details = st.text_area(
+                "ಮಾರ್ಗಮಧ್ಯದಲ್ಲಿರುವ ಮಸೀದಿ ಹಾಗೂ ಚರ್ಚಗಳ ವಿವರ :", 
+                placeholder="ವಿವರಗಳನ್ನು ಇಲ್ಲಿ ಟೈಪ್ ಮಾಡಿ..."
+            )
+
+            past_incident_details = st.text_area(
+                "ಈ ಹಿಂದೆ ನಡೆದ ಘಟನೆ/ಪ್ರಕರಣಗಳ ವಿವರ :", 
+                placeholder="ವಿವರಗಳನ್ನು ಇಲ್ಲಿ ಟೈಪ್ ಮಾಡಿ..."
+            )
+
+            submit_btn = st.form_submit_button("ಮಾಹಿತಿ ಸಲ್ಲಿಸಿ (Submit Record)")
+
+            if submit_btn:
+                if not sp_unique_id.strip():
+                    st.warning("ದಯವಿಟ್ಟು 'ಜಿಲ್ಲಾ ಕಚೇರಿಯಿಂದ ನೀಡಲಾದ ಸಂಖ್ಯೆ'ಯನ್ನು ನಮೂದಿಸಿ.")
+                elif not pandal_name.strip():
+                    st.warning("ದಯವಿಟ್ಟು ಗಣೇಶೋತ್ಸವ ಸಮಿತಿಯ ಹೆಸರನ್ನು ನಮೂದಿಸಿ.")
+                else:
+                    record = {
+                        "id": str(sp_unique_id).strip(),
+                        "station_name": str(selected_stn),
+                        "pandal_name": str(pandal_name).strip(),
+                        "location_address": str(location_address).strip() if location_address else "",
+                        "beat_number": int(beat_number),
+                        "beat_staff_details": str(beat_staff_details).strip() if beat_staff_details else "",
+                        "installation_date": install_date.strftime("%Y-%m-%d"),
+                        "president_name": str(president_name).strip() if president_name else "",
+                        "president_phone": str(president_phone).strip() if president_phone else "",
+                        "vice_president_name": str(vice_president_name).strip() if vice_president_name else "",
+                        "vice_president_phone": str(vice_president_phone).strip() if vice_president_phone else "",
+                        "sensitivity_level": str(sensitivity_level),
+                        "immersion_date": immersion_date.strftime("%Y-%m-%d"),
+                        "sensitive_route_details": str(sensitive_route_details).strip() if sensitive_route_details else "",
+                        "past_incident_details": str(past_incident_details).strip() if past_incident_details else ""
+                    }
+                    try:
+                        supabase.table("ganesh_idols").insert(record).execute()
+                        
+                        updated_entered = entered_val + 1
+                        updated_remaining = max(0, target_val - updated_entered) if target_val > 0 else 0
+                        
+                        st.success(f"ನಿಮ್ಮ ವಿವರಗಳನ್ನು ಸಲ್ಲಿಸಲಾಗಿದೆ. ಮಾಹಿತಿ ಸಲ್ಲಿಸಲು ಬಾಕಿ ಇರುವ ಗಣೇಶ ಮೂರ್ತಿಗಳ ವಿವರ: {updated_remaining}")
+                        st.rerun()
+                    except Exception as db_err:
+                        st.error(f"ಡೇಟಾಬೇಸ್‌ನಲ್ಲಿ ದಾಖಲಿಸಲು ಸಾಧ್ಯವಾಗಿಲ್ಲ: {db_err}")
 
 # ==========================================
 # 3. BEAT STAFF FIELD UPDATE INTERFACE
