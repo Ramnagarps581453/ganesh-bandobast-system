@@ -45,7 +45,7 @@ if role == "Division Control Dashboard":
     try:
         response = supabase.table("ganesh_idols").select("*").execute()
         all_idols = response.data
-    except Exception as e:
+    except Exception:
         all_idols = []
 
     df_all = pd.DataFrame(all_idols) if all_idols else pd.DataFrame()
@@ -58,11 +58,9 @@ if role == "Division Control Dashboard":
     
     with col_date:
         if not df_all.empty and "immersion_date" in df_all.columns:
-            # Extract distinct raw YYYY-MM-DD dates
             entered_dates = df_all["immersion_date"].dropna().unique().tolist()
             raw_dates = sorted([str(d).strip() for d in entered_dates if str(d).strip() != ""])
             
-            # Map raw YYYY-MM-DD to DD/MM/YYYY display strings
             date_map = {}
             for rd in raw_dates:
                 try:
@@ -78,8 +76,9 @@ if role == "Division Control Dashboard":
             
         selected_date_display = st.selectbox("ವಿಸರ್ಜನೆ ದಿನಾಂಕ (Date of Immersion):", date_options)
 
+    default_stations = ["Haliyal", "Dandeli Town", "Dandeli Rural", "Ambikanagar", "Ramanagar", "Joida"]
+    
     with col_stn:
-        default_stations = ["Haliyal", "Dandeli Town", "Dandeli Rural", "Ambikanagar", "Ramanagar", "Joida"]
         if not df_all.empty and "station_name" in df_all.columns:
             existing_stns = df_all["station_name"].dropna().unique().tolist()
             all_stns = list(set(default_stations + existing_stns))
@@ -135,6 +134,38 @@ if role == "Division Control Dashboard":
     c1.metric("🔴 ಅತೀಸೂಕ್ಷ್ಮ (Hyper-sensitive)", v_hyper)
     c2.metric("🟡 ಸೂಕ್ಷ್ಮ (Sensitive)", v_sens)
     c3.metric("🟢 ಸಾಮಾನ್ಯ (Normal)", v_norm)
+
+    # ==========================================
+    # DIVISION CONTROL: SET STATION TARGETS
+    # ==========================================
+    st.markdown("---")
+    st.subheader("🎯 ಠಾಣಾವಾರು ಗಣೇಶ ಮೂರ್ತಿಗಳ ನಿಗದಿತ ಸಂಖ್ಯೆ (Set Police Station Targets)")
+    st.caption("ವಿಭಾಗೀಯ ಕಚೇರಿಯಿಂದ ಪ್ರತಿಯೊಂದು ಪೋಲಿಸ್ ಠಾಣೆಗೆ ಒಟ್ಟು ಗಣೇಶ ಮೂರ್ತಿಗಳ ಸಂಖ್ಯೆಯನ್ನು ಇಲ್ಲಿ ನಮೂದಿಸಿ.")
+
+    col_target_stn, col_target_num, col_target_btn = st.columns([2, 2, 1])
+    
+    with col_target_stn:
+        target_stn_choice = st.selectbox("ಪೋಲಿಸ್ ಠಾಣೆ ಆಯ್ಕೆಮಾಡಿ:", sorted(all_stns), key="div_target_stn")
+        
+    # Retrieve current saved target for chosen station
+    try:
+        res_t = supabase.table("station_targets").select("target_count").eq("station_name", target_stn_choice).execute()
+        current_t_val = res_t.data[0]["target_count"] if res_t.data else 10
+    except Exception:
+        current_t_val = 10
+
+    with col_target_num:
+        set_target_val = st.number_input("ಒಟ್ಟು ನಿಗದಿತ ಗಣೇಶ ಮೂರ್ತಿಗಳ ಸಂಖ್ಯೆ:", min_value=1, max_value=1000, value=current_t_val, key="div_target_val")
+
+    with col_target_btn:
+        st.markdown("<br>", unsafe_allow_html=True)
+        if st.button("ಸಂಖ್ಯೆ ಉಳಿಸಿ (Save Target)", type="primary"):
+            try:
+                supabase.table("station_targets").upsert({"station_name": target_stn_choice, "target_count": set_target_val}).execute()
+                st.success(f"{target_stn_choice} ಠಾಣೆಗೆ {set_target_val} ಮೂರ್ತಿಗಳ ಸಂಖ್ಯೆಯನ್ನು ಉಳಿಸಲಾಗಿದೆ!")
+                st.rerun()
+            except Exception as e:
+                st.error(f"Error saving target: {e}")
 
     st.markdown("---")
 
@@ -248,39 +279,30 @@ elif role == "ಠಾಣಾ ಬರಹಗಾರರು (Station Writer)":
                 st.session_state["selected_station_writer"] = None
                 st.rerun()
 
-        # Calculate Total Target vs Entered Records Count
+        # Retrieve Target Set by Division Control
         try:
             res_target = supabase.table("station_targets").select("target_count").eq("station_name", selected_stn).execute()
             target_val = res_target.data[0]["target_count"] if res_target.data else 0
         except Exception:
             target_val = 0
 
+        # Retrieve Entered Records Count
         try:
             res_entered = supabase.table("ganesh_idols").select("id", count="exact").eq("station_name", selected_stn).execute()
             entered_val = res_entered.count if res_entered.count is not None else 0
         except Exception:
             entered_val = 0
 
-        col_target_input, col_target_status = st.columns([2, 2])
+        remaining_val = max(0, target_val - entered_val) if target_val > 0 else 0
 
-        with col_target_input:
-            if target_val == 0:
-                new_target = st.number_input(
-                    "ಪೋಲಿಸ್ ಠಾಣಾ ವ್ಯಾಪ್ತಿಯಲ್ಲಿ ಪ್ರತಿಷ್ಠಾಪನೆಯಾಗಲಿರುವ ಒಟ್ಟು ಗಣೇಶ ಮೂರ್ತಿಗಳ ಸಂಖ್ಯೆ :", 
-                    min_value=1, max_value=500, value=10
-                )
-                if st.button("ಸಂಖ್ಯೆಯನ್ನು ಉಳಿಸಿ (Save Total Target)"):
-                    supabase.table("station_targets").upsert({"station_name": selected_stn, "target_count": new_target}).execute()
-                    st.success("ಒಟ್ಟು ಸಂಖ್ಯೆಯನ್ನು ಯಶಸ್ವಿಯಾಗಿ ಉಳಿಸಲಾಗಿದೆ!")
-                    st.rerun()
-            else:
-                st.info(f"**ಒಟ್ಟು ನಿಗದಿತ ಗಣೇಶ ಮೂರ್ತಿಗಳ ಸಂಖ್ಯೆ:** {target_val}")
+        # Read-Only Progress Display
+        col_t1, col_t2, col_t3 = st.columns(3)
+        col_t1.metric("ನಿಗದಿತ ಒಟ್ಟು ಗಣೇಶ ಮೂರ್ತಿಗಳು (Division Target)", target_val if target_val > 0 else "ನಿಗದಿಯಾಗಿಲ್ಲ")
+        col_t2.metric("ದಾಖಲಿಸಲಾದ ವಿವರಗಳು (Entered)", entered_val)
+        col_t3.metric("ದಾಖಲಿಸಲು ಬಾಕಿ ಇರುವ ವಿವರಗಳು (Remaining)", remaining_val)
 
-        with col_target_status:
-            remaining_val = max(0, target_val - entered_val) if target_val > 0 else 0
-            st.metric("ದಾಖಲಿಸಲಾದ ವಿವರಗಳು", f"{entered_val} / {target_val if target_val > 0 else 'ನಿಗದಿಯಾಗಿಲ್ಲ'}")
-            if target_val > 0:
-                st.warning(f"**ಇನ್ನೂ ಭರ್ತಿ ಮಾಡಲು ಬಾಕಿ ಇರುವ ಸಂಖ್ಯೆ:** {remaining_val}")
+        if target_val == 0:
+            st.info("ℹ️ ಸೂಚನೆ: ನಿಮ್ಮ ಠಾಣೆಗೆ ನಿಗದಿತ ಒಟ್ಟು ಗಣೇಶ ಮೂರ್ತಿಗಳ ಸಂಖ್ಯೆಯನ್ನು ವಿಭಾಗೀಯ ಕಚೇರಿಯಿಂದ (Division Control) ಇನ್ನು ನಮೂದಿಸಬೇಕಾಗಿದೆ.")
 
         st.markdown("---")
 
