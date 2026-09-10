@@ -189,17 +189,22 @@ if role == "Division Control Dashboard":
 
     st.markdown("<br>", unsafe_allow_html=True)
 
-    st.subheader("View PDF Report")
-    if REPORTLAB_AVAILABLE:
-        if not filtered_df.empty:
-            cols_to_print = [c for c in ['id', 'station_name', 'pandal_name', 'sensitivity_level', 'immersion_date', 'immersion_status'] if c in filtered_df.columns]
-            pdf_data = generate_pdf(filtered_df[cols_to_print])
-            st.download_button(
-                label="📄 PDF ವರದಿ ಡೌನ್‌ಲೋಡ್ ಮಾಡಿ (Download PDF Report)",
-                data=pdf_data,
-                file_name=f"Ganesh_Bandobast_Report_{datetime.date.today()}.pdf",
-                mime="application/pdf"
-            )
+    # Add pandas/io import at the top:
+# from io import BytesIO
+
+st.subheader("📊 ಡೌನ್‌ಲೋಡ್ ವರದಿ (Download Excel Report)")
+
+if not filtered_df.empty:
+    buffer = BytesIO()
+    with pd.ExcelWriter(buffer, engine='openpyxl') as writer:
+        filtered_df.to_excel(writer, index=False, sheet_name='Ganesh_Bandobast')
+    
+    st.download_button(
+        label="📥 Excel ವರದಿ ಡೌನ್‌ಲೋಡ್ ಮಾಡಿ (Download Excel)",
+        data=buffer.getvalue(),
+        file_name=f"Ganesh_Bandobast_Report_{datetime.date.today()}.xlsx",
+        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    )
         else:
             st.info("ವರದಿ ರಚಿಸಲು ಯಾವುದೇ ಡೇಟಾ ಲಭ್ಯವಿಲ್ಲ.")
     else:
