@@ -310,7 +310,7 @@ if role == "Division Control Dashboard":
             st.info("No records available to delete.")
 
 # ==========================================
-# 2. STATION WRITER INTERFACE
+# 2. STATION WRITER INTERFACE (UPDATED WITH FORM CLEARING)
 # ==========================================
 elif role == "ಠಾಣಾ ಬರಹಗಾರರು (Station Writer)":
     st.markdown(
@@ -345,18 +345,14 @@ elif role == "ಠಾಣಾ ಬರಹಗಾರರು (Station Writer)":
 
     if not st.session_state["selected_station_writer"]:
         st.markdown("---")
-        st.subheader(
-            "🏢 ಪೋಲಿಸ್ ಠಾಣೆಯನ್ನು ಆಯ್ಕೆಮಾಡಿ (Select Police Station)"
-        )
+        st.subheader("🏢 ಪೋಲಿಸ್ ಠಾಣೆಯನ್ನು ಆಯ್ಕೆಮಾಡಿ (Select Police Station)")
 
         selected_stn = st.selectbox(
             "ದಯವಿಟ್ಟು ನಿಮ್ಮ ಠಾಣೆಯನ್ನು ಆಯ್ಕೆಮಾಡಿ:",
             ["-- ಠಾಣೆ ಆಯ್ಕೆಮಾಡಿ --"] + station_options,
         )
 
-        if st.button(
-            "ಠಾಣೆ ಪ್ರವೇಶಿಸಿ (Proceed to Station Entry)", type="primary"
-        ):
+        if st.button("ಠಾಣೆ ಪ್ರವೇಶಿಸಿ (Proceed to Station Entry)", type="primary"):
             if selected_stn != "-- ಠಾಣೆ ಆಯ್ಕೆಮಾಡಿ --":
                 st.session_state["selected_station_writer"] = selected_stn
                 st.rerun()
@@ -364,6 +360,20 @@ elif role == "ಠಾಣಾ ಬರಹಗಾರರು (Station Writer)":
                 st.warning("ದಯವಿಟ್ಟು ಪಟ್ಟಿಯಿಂದ ನಿಮ್ಮ ಠಾಣೆಯನ್ನು ಆಯ್ಕೆಮಾಡಿ.")
     else:
         selected_stn = st.session_state["selected_station_writer"]
+
+        # Function to clear input fields after successful submission
+        def clear_writer_form():
+            st.session_state["writer_sp_id"] = ""
+            st.session_state["writer_pandal"] = ""
+            st.session_state["writer_address"] = ""
+            st.session_state["writer_beat_num"] = 1
+            st.session_state["writer_beat_staff"] = ""
+            st.session_state["writer_president"] = ""
+            st.session_state["writer_pres_phone"] = ""
+            st.session_state["writer_vice_pres"] = ""
+            st.session_state["writer_vice_phone"] = ""
+            st.session_state["writer_route"] = ""
+            st.session_state["writer_incident"] = ""
 
         col_stn_title, col_stn_change = st.columns([3, 1])
         with col_stn_title:
@@ -395,16 +405,12 @@ elif role == "ಠಾಣಾ ಬರಹಗಾರರು (Station Writer)":
                 .eq("station_name", selected_stn)
                 .execute()
             )
-            stn_records = (
-                res_stn_records.data if res_stn_records.data else []
-            )
+            stn_records = res_stn_records.data if res_stn_records.data else []
         except Exception:
             stn_records = []
 
         entered_val = len(stn_records)
-        remaining_val = (
-            max(0, target_val - entered_val) if target_val > 0 else 0
-        )
+        remaining_val = max(0, target_val - entered_val) if target_val > 0 else 0
 
         # Read-Only Progress Display
         col_t1, col_t2, col_t3 = st.columns(3)
@@ -413,91 +419,107 @@ elif role == "ಠಾಣಾ ಬರಹಗಾರರು (Station Writer)":
             target_val if target_val > 0 else "ನಿಗದಿಯಾಗಿಲ್ಲ",
         )
         col_t2.metric("ದಾಖಲಿಸಲಾದ ವಿವರಗಳು (Entered)", entered_val)
-        col_t3.metric(
-            "ದಾಖಲಿಸಲು ಬಾಕಿ ಇರುವ ವಿವರಗಳು (Remaining)", remaining_val
-        )
+        col_t3.metric("ದಾಖಲಿಸಲು ಬಾಕಿ ಇರುವ ವಿವರಗಳು (Remaining)", remaining_val)
 
         if target_val == 0:
             st.info(
                 "ℹ️ ಸೂಚನೆ: ನಿಮ್ಮ ಠಾಣೆಗೆ ನಿಗದಿತ ಒಟ್ಟು ಗಣೇಶ ಮೂರ್ತಿಗಳ ಸಂಖ್ಯೆಯನ್ನು ವಿಭಾಗೀಯ ಕಚೇರಿಯಿಂದ (Division Control) ಇನ್ನು ನಮೂದಿಸಬೇಕಾಗಿದೆ."
             )
 
-        # Display persistent submission success notification if available
         if st.session_state.get("show_writer_success_msg"):
             st.success(st.session_state["show_writer_success_msg"], icon="✅")
             del st.session_state["show_writer_success_msg"]
 
         st.markdown("---")
 
-        # Form accepting SP Office Unique ID & Unicode Kannada text
+        # Form with Session State Keys for Auto-Clearing
         with st.form("station_writer_form"):
             sp_unique_id = st.text_input(
                 "ಜಿಲ್ಲಾ ಕಚೇರಿಯಿಂದ ನೀಡಲಾದ ಸಂಖ್ಯೆ (SP Office Unique ID) :",
                 placeholder="ಉದಾ: SP/GNS/2026/01",
+                key="writer_sp_id",
             )
             pandal_name = st.text_input(
                 "ಗಣೇಶೋತ್ಸವ ಸಮಿತಿಯ ಹೆಸರು :",
                 placeholder="ಉದಾ: ಶ್ರೀ ವಿನಾಯಕ ಯುವಕ ಮಂಡಳಿ",
+                key="writer_pandal",
             )
             location_address = st.text_input(
                 "ಪ್ರತಿಷ್ಠಾಪನೆಯಾಗುವ ಸ್ಥಳ :",
                 placeholder="ಉದಾ: ಬಸ್ ನಿಲ್ದಾಣದ ಹತ್ತಿರ",
+                key="writer_address",
             )
 
             col_beat, col_staff = st.columns(2)
             beat_number = col_beat.number_input(
-                "ಬೀಟ್ ನಂಬರ :", min_value=1, max_value=100, value=1
+                "ಬೀಟ್ ನಂಬರ :",
+                min_value=1,
+                max_value=100,
+                key="writer_beat_num",
             )
             beat_staff_details = col_staff.text_input(
                 "ಬೀಟ್ ಸಿಬ್ಬಂದಿ ವಿವರ (ಹೆಸರು, ಮೊಬೈಲ್ ನಂ) :",
                 placeholder="ಉದಾ: ಹೆಚ್‌ಸಿ 452 ರಮೇಶ್, 9876543210",
+                key="writer_beat_staff",
             )
 
             install_date = st.date_input(
                 "ಗಣೇಶ ಪ್ರತಿಷ್ಠಾಪನ ದಿನಾಂಕ :",
                 datetime.date.today(),
                 format="DD/MM/YYYY",
+                key="writer_install_date",
             )
 
             col_p1, col_p2 = st.columns(2)
             president_name = col_p1.text_input(
-                "ಕಮಿಟಿ ಅಧ್ಯಕ್ಷರ ಹೆಸರು :", placeholder="ಅಧ್ಯಕ್ಷರ ಹೆಸರು"
+                "ಕಮಿಟಿ ಅಧ್ಯಕ್ಷರ ಹೆಸರು :",
+                placeholder="ಅಧ್ಯಕ್ಷರ ಹೆಸರು",
+                key="writer_president",
             )
             president_phone = col_p2.text_input(
-                "ಮೊಬೈಲ್ ನಂ (ಅಧ್ಯಕ್ಷರು) :", placeholder="9876543210"
+                "ಮೊಬೈಲ್ ನಂ (ಅಧ್ಯಕ್ಷರು) :",
+                placeholder="9876543210",
+                key="writer_pres_phone",
             )
 
             col_v1, col_v2 = st.columns(2)
             vice_president_name = col_v1.text_input(
-                "ಕಮಿಟಿ ಉಪಾಧ್ಯಕ್ಷರ ಹೆಸರು :", placeholder="ಉಪಾಧ್ಯಕ್ಷರ ಹೆಸರು"
+                "ಕಮಿಟಿ ಉಪಾಧ್ಯಕ್ಷರ ಹೆಸರು :",
+                placeholder="ಉಪಾಧ್ಯಕ್ಷರ ಹೆಸರು",
+                key="writer_vice_pres",
             )
             vice_president_phone = col_v2.text_input(
-                "ಮೊಬೈಲ್ ನಂ (ಉಪಾಧ್ಯಕ್ಷರು) :", placeholder="9876543210"
+                "ಮೊಬೈಲ್ ನಂ (ಉಪಾಧ್ಯಕ್ಷರು) :",
+                placeholder="9876543210",
+                key="writer_vice_phone",
             )
 
             sensitivity_level = st.selectbox(
-                "ವರ್ಗ :", ["ಸಾಮಾನ್ಯ", "ಸೂಕ್ಷ್ಮ", "ಅತೀಸೂಕ್ಷ್ಮ"]
+                "ವರ್ಗ :",
+                ["ಸಾಮಾನ್ಯ", "ಸೂಕ್ಷ್ಮ", "ಅತೀಸೂಕ್ಷ್ಮ"],
+                key="writer_sensitivity",
             )
 
             immersion_date = st.date_input(
                 "ವಿಸರ್ಜನೆಯಾಗುವ ದಿನಾಂಕ :",
                 datetime.date.today(),
                 format="DD/MM/YYYY",
+                key="writer_immersion_date",
             )
 
             sensitive_route_details = st.text_area(
                 "ಮಾರ್ಗಮಧ್ಯದಲ್ಲಿರುವ ಮಸೀದಿ ಹಾಗೂ ಚರ್ಚಗಳ ವಿವರ :",
                 placeholder="ವಿವರಗಳನ್ನು ಇಲ್ಲಿ ಟೈಪ್ ಮಾಡಿ...",
+                key="writer_route",
             )
 
             past_incident_details = st.text_area(
                 "ಈ ಹಿಂದೆ ನಡೆದ ಘಟನೆ/ಪ್ರಕರಣಗಳ ವಿವರ :",
                 placeholder="ವಿವರಗಳನ್ನು ಇಲ್ಲಿ ಟೈಪ್ ಮಾಡಿ...",
+                key="writer_incident",
             )
 
-            submit_btn = st.form_submit_button(
-                "ಮಾಹಿತಿ ಸಲ್ಲಿಸಿ (Submit Record)"
-            )
+            submit_btn = st.form_submit_button("ಮಾಹಿತಿ ಸಲ್ಲಿಸಿ (Submit Record)")
 
             if submit_btn:
                 if not sp_unique_id.strip():
@@ -505,18 +527,14 @@ elif role == "ಠಾಣಾ ಬರಹಗಾರರು (Station Writer)":
                         "ದಯವಿಟ್ಟು 'ಜಿಲ್ಲಾ ಕಚೇರಿಯಿಂದ ನೀಡಲಾದ ಸಂಖ್ಯೆ'ಯನ್ನು ನಮೂದಿಸಿ."
                     )
                 elif not pandal_name.strip():
-                    st.warning(
-                        "ದಯವಿಟ್ಟು ಗಣೇಶೋತ್ಸವ ಸಮಿತಿಯ ಹೆಸರನ್ನು ನಮೂದಿಸಿ."
-                    )
+                    st.warning("ದಯವಿಟ್ಟು ಗಣೇಶೋತ್ಸವ ಸಮಿತಿಯ ಹೆಸರನ್ನು ನಮೂದಿಸಿ.")
                 else:
                     record = {
                         "id": str(sp_unique_id).strip(),
                         "station_name": str(selected_stn),
                         "pandal_name": str(pandal_name).strip(),
                         "location_address": (
-                            str(location_address).strip()
-                            if location_address
-                            else ""
+                            str(location_address).strip() if location_address else ""
                         ),
                         "beat_number": int(beat_number),
                         "beat_staff_details": (
@@ -526,14 +544,10 @@ elif role == "ಠಾಣಾ ಬರಹಗಾರರು (Station Writer)":
                         ),
                         "installation_date": install_date.strftime("%Y-%m-%d"),
                         "president_name": (
-                            str(president_name).strip()
-                            if president_name
-                            else ""
+                            str(president_name).strip() if president_name else ""
                         ),
                         "president_phone": (
-                            str(president_phone).strip()
-                            if president_phone
-                            else ""
+                            str(president_phone).strip() if president_phone else ""
                         ),
                         "vice_president_name": (
                             str(vice_president_name).strip()
@@ -569,16 +583,17 @@ elif role == "ಠಾಣಾ ಬರಹಗಾರರು (Station Writer)":
                         )
 
                         st.session_state["show_writer_success_msg"] = (
-                            f"ವರದಿಯನ್ನು ಯಶಸ್ವಿಯಾಗಿ ಸಲ್ಲಿಸಲಾಗಿದೆ! (Report Submitted Successfully!) - unique ID: {sp_unique_id}. "
-                            f"ಮಾಹಿತಿ ಸಲ್ಲಿಸಲು ಬಾಕಿ ಇರುವ ಗಣೇಶ ಮೂರ್ತಿಗಳ ವಿವರ: {updated_remaining}"
-                        )
-                        st.rerun()
-                    except Exception as db_err:
-                        st.error(
-                            f"ಡೇಟಾಬೇಸ್‌ನಲ್ಲಿ ದಾಖಲಿಸಲು ಸಾಧ್ಯವಾಗಿಲ್ಲ: {db_err}"
+                            f"ವರದಿಯನ್ನು ಯಶಸ್ವಿಯಾಗಿ ಸಲ್ಲಿಸಲಾಗಿದೆ! - Unique ID: {sp_unique_id}. "
+                            f"ದಾಖಲಿಸಲು ಬಾಕಿ ಇರುವ ಗಣೇಶ ಮೂರ್ತಿಗಳು: {updated_remaining}"
                         )
 
-        # Display Station Submitted Details Table (Fetched directly from Supabase)
+                        # Erase input field contents for new entry
+                        clear_writer_form()
+                        st.rerun()
+
+                    except Exception as db_err:
+                        st.error(f"ಡೇಟಾಬೇಸ್‌ನಲ್ಲಿ ದಾಖಲಿಸಲು ಸಾಧ್ಯವಾಗಿಲ್ಲ: {db_err}")
+
         st.markdown("---")
         st.subheader(
             f"📋 {selected_stn} ಠಾಣೆಯಲ್ಲಿ ನಮೂದಿಸಲಾದ ಎಲ್ಲಾ ವಿವರಗಳು (Submitted Station Records)"
