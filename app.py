@@ -61,9 +61,9 @@ if role == "Division Control Dashboard":
     with col_date:
         if not df_all.empty and "immersion_date" in df_all.columns:
             # Extract ONLY immersion dates actually entered by station writers
-            raw_dates = df_all["immersion_date"].dropna().unique().tolist()
-            entered_dates = sorted([str(d).strip() for d in raw_dates if str(d).strip() != ""])
-            date_options = ["All Dates"] + entered_dates
+            entered_dates = df_all["immersion_date"].dropna().unique().tolist()
+            sorted_dates = sorted([str(d).strip() for d in entered_dates if str(d).strip() != ""])
+            date_options = ["All Dates"] + sorted_dates
         else:
             date_options = ["All Dates"]
             
@@ -106,8 +106,8 @@ if role == "Division Control Dashboard":
 
     st.markdown("<br>", unsafe_allow_html=True)
 
-    # Excel Download Block (Fully Preserves Unicode Kannada Text)
-    st.subheader("📊 Excel ವರದಿ ಡೌನ್‌ಲೋಡ್ (Download Excel Report)")
+    # Excel Download Block (Fully Preserves Kannada Unicode Text)
+    st.subheader("📊 ಡೌನ್‌ಲೋಡ್ ವರದಿ (Download Excel Report)")
     if not filtered_df.empty:
         buffer = BytesIO()
         with pd.ExcelWriter(buffer, engine='openpyxl') as writer:
